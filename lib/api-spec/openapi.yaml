@@ -3,13 +3,19 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: TrueNewsScanner API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: check
+    description: Content checking operations
+  - name: report
+    description: Community report operations
+  - name: admin
+    description: Admin moderation operations
 paths:
   /healthz:
     get:
@@ -24,6 +30,171 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /check:
+    post:
+      operationId: submitCheck
+      tags: [check]
+      summary: Submit content for checking
+      description: Routes input to the appropriate pipeline (URL, phone, message, news)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckRequest"
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /checks/recent:
+    get:
+      operationId: getRecentChecks
+      tags: [check]
+      summary: Get recent check statistics
+      description: Returns aggregated stats about recent checks
+      responses:
+        "200":
+          description: Recent check stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecentCheckStats"
+
+  /report:
+    post:
+      operationId: submitReport
+      tags: [report]
+      summary: Submit a community report
+      description: Report a suspicious phone number, link, or message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+      responses:
+        "201":
+          description: Report submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/reports:
+    get:
+      operationId: getAdminReports
+      tags: [admin]
+      summary: Get all reports for admin review
+      description: Returns all community reports, optionally filtered by status
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, reviewed, dismissed]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [url, phone, message, news]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReportList"
+
+  /admin/reports/{id}:
+    get:
+      operationId: getAdminReport
+      tags: [admin]
+      summary: Get a single report by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReport"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    patch:
+      operationId: updateAdminReport
+      tags: [admin]
+      summary: Update a report (add notes, change status)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReportRequest"
+      responses:
+        "200":
+          description: Updated report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminReport"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get admin dashboard statistics
+      description: Returns counts and breakdowns for admin overview
+      responses:
+        "200":
+          description: Admin stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +205,356 @@ components:
       required:
         - status
 
+    CheckType:
+      type: string
+      enum: [url, phone, message, news]
+
+    Verdict:
+      type: string
+      enum:
+        - safe
+        - insufficient
+        - suspicious
+        - misleading
+        - scam
+
+    CheckRequest:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/CheckType"
+        input:
+          type: string
+          description: The URL, phone number, message text, or news text to check
+      required:
+        - type
+        - input
+
+    Signal:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+          description: Bulgarian label for the signal
+        description:
+          type: string
+          description: Bulgarian description of what was found
+        weight:
+          type: number
+          description: Contribution to risk score (-1 to 1)
+        isRisk:
+          type: boolean
+          description: True if this signal increases risk
+      required:
+        - id
+        - label
+        - description
+        - weight
+        - isRisk
+
+    Evidence:
+      type: object
+      properties:
+        source:
+          type: string
+          description: Name of the data source
+        finding:
+          type: string
+          description: Bulgarian description of what was found
+        url:
+          type: string
+          nullable: true
+          description: Optional link to source
+      required:
+        - source
+        - finding
+
+    NextStep:
+      type: object
+      properties:
+        action:
+          type: string
+          description: Bulgarian action label
+        description:
+          type: string
+          description: Bulgarian description
+        priority:
+          type: string
+          enum: [high, medium, low]
+      required:
+        - action
+        - description
+        - priority
+
+    CheckResult:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/CheckType"
+        input:
+          type: string
+        verdict:
+          $ref: "#/components/schemas/Verdict"
+        verdictLabel:
+          type: string
+          description: Bulgarian verdict label
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 0=safe, 100=definite scam
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Confidence in the assessment
+        summary:
+          type: string
+          description: Bulgarian summary of the assessment
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Signal"
+        evidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/Evidence"
+        nextSteps:
+          type: array
+          items:
+            $ref: "#/components/schemas/NextStep"
+        checkedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - type
+        - input
+        - verdict
+        - verdictLabel
+        - riskScore
+        - confidence
+        - summary
+        - signals
+        - evidence
+        - nextSteps
+        - checkedAt
+
+    RecentCheckStats:
+      type: object
+      properties:
+        totalChecks:
+          type: integer
+        todayChecks:
+          type: integer
+        scamsDetected:
+          type: integer
+        byType:
+          type: object
+          properties:
+            url:
+              type: integer
+            phone:
+              type: integer
+            message:
+              type: integer
+            news:
+              type: integer
+          required:
+            - url
+            - phone
+            - message
+            - news
+        byVerdict:
+          type: object
+          properties:
+            safe:
+              type: integer
+            insufficient:
+              type: integer
+            suspicious:
+              type: integer
+            misleading:
+              type: integer
+            scam:
+              type: integer
+          required:
+            - safe
+            - insufficient
+            - suspicious
+            - misleading
+            - scam
+      required:
+        - totalChecks
+        - todayChecks
+        - scamsDetected
+        - byType
+        - byVerdict
+
+    ReportRequest:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/CheckType"
+        content:
+          type: string
+          description: The suspicious content being reported
+        description:
+          type: string
+          description: Reporter's description of why this is suspicious
+        reporterContact:
+          type: string
+          nullable: true
+          description: Optional contact email or phone
+      required:
+        - type
+        - content
+        - description
+
+    ReportResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+          description: Bulgarian confirmation message
+        submittedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - message
+        - submittedAt
+
+    AdminReport:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/CheckType"
+        content:
+          type: string
+        description:
+          type: string
+        reporterContact:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, reviewed, dismissed]
+        adminNotes:
+          type: string
+          nullable: true
+        reviewedBy:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - type
+        - content
+        - description
+        - status
+        - submittedAt
+
+    AdminReportList:
+      type: object
+      properties:
+        reports:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminReport"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required:
+        - reports
+        - total
+        - page
+        - limit
+
+    UpdateReportRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, reviewed, dismissed]
+        adminNotes:
+          type: string
+          nullable: true
+        reviewedBy:
+          type: string
+          nullable: true
+
+    AdminStats:
+      type: object
+      properties:
+        totalReports:
+          type: integer
+        pendingReports:
+          type: integer
+        reviewedReports:
+          type: integer
+        dismissedReports:
+          type: integer
+        reportsByType:
+          type: object
+          properties:
+            url:
+              type: integer
+            phone:
+              type: integer
+            message:
+              type: integer
+            news:
+              type: integer
+          required:
+            - url
+            - phone
+            - message
+            - news
+        recentActivity:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+              count:
+                type: integer
+            required:
+              - date
+              - count
+      required:
+        - totalReports
+        - pendingReports
+        - reviewedReports
+        - dismissedReports
+        - reportsByType
+        - recentActivity
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+        - message
