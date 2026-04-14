@@ -18,18 +18,16 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install root dependencies
-        run: npm install
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
-      - name: Install frontend dependencies
-        run: |
-          cd artifacts/truenewsscanner
-          npm install
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Build frontend
-        run: |
-          cd artifacts/truenewsscanner
-          npm run build
+        run: pnpm --dir artifacts/truenewsscanner build
 
       - name: Create ZIP from dist
         run: |
