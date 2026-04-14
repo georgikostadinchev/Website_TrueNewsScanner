@@ -1,0 +1,79 @@
+name: Build Laravel ZIP
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, bcmath, zip
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Install NPM dependencies
+        run: npm install
+
+      - name: Build frontend assets
+        run: npm run build
+
+      - name: Prepare deployment folder
+        run: |
+          rm -rf deploy
+          mkdir deploy
+
+          cp -r app deploy/
+          cp -r bootstrap deploy/
+          cp -r config deploy/
+          cp -r database deploy/
+          cp -r public deploy/
+          cp -r resources deploy/
+          cp -r routes deploy/
+          cp -r storage deploy/
+          cp -r vendor deploy/
+
+          cp artisan deploy/
+          cp composer.json deploy/
+          cp composer.lock deploy/
+          cp package.json deploy/
+          cp package-lock.json deploy/
+
+          if [ -f vite.config.js ]; then cp vite.config.js deploy/; fi
+          if [ -f vite.config.ts ]; then cp vite.config.ts deploy/; fi
+
+          if [ -f .env.example ]; then cp .env.example deploy/; fi
+
+      - name: Cleanup unnecessary files
+        run: |
+          find deploy/storage/framework/cache -type f ! -name ".gitignore" -delete || true
+          find deploy/storage/framework/sessions -type f ! -name ".gitignore" -delete || true
+          find deploy/storage/framework/views -type f ! -name ".gitignore" -delete || true
+          find deploy/bootstrap/cache -type f ! -name ".gitignore" -delete || true
+
+      - name: Create ZIP archive
+        run: |
+          cd deploy
+          zip -r ../laravel-deploy.zip .
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: laravel-deploy
+          path: laravel-deploy.zip
