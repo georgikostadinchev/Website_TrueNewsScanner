@@ -27,12 +27,15 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Build frontend
-        run: pnpm --dir artifacts/truenewsscanner build
+        env:
+          BASE_PATH: /
+          PORT: 3000
+        run: ./artifacts/truenewsscanner/node_modules/.bin/vite build --config artifacts/truenewsscanner/vite.config.ts
 
-      - name: Create ZIP from dist
+      - name: Create ZIP from static site output
         run: |
-          cd artifacts/truenewsscanner
-          zip -r ../../site-build.zip dist
+          cd artifacts/truenewsscanner/dist/public
+          zip -r "$GITHUB_WORKSPACE/site-build.zip" .
 
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
