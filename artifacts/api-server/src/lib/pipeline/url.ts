@@ -1,9 +1,5 @@
-// TODO: Replace mock logic with real providers:
-// - Google Web Risk API (malware/phishing detection)
-// - RDAP (domain registration lookup)
-// - urlscan.io (optional: screenshot + threat analysis)
-
-import { type PipelineResult, type Signal, type Evidence, scoreToVerdict, verdictToLabel } from "./types";
+import { type PipelineResult, scoreToVerdict, verdictToLabel } from "./types";
+import { aiCheck } from "./ai";
 
 function extractDomain(url: string): string {
   try {
@@ -27,33 +23,26 @@ const SAFE_INDICATORS = [
 ];
 
 function buildSummary(verdict: string, score: number, subject: string): string {
-  if (verdict === "safe") return `Проверката на "${subject}" не откри явни признаци на измама или злонамерено съдържание. Въпреки това, препоръчваме внимание при споделяне на лична информация.`;
-  if (verdict === "insufficient") return `За "${subject}" няма достатъчно данни за категорична оценка. Препоръчваме допълнителна проверка преди взаимодействие.`;
-  if (verdict === "suspicious") return `Открити са съмнителни характеристики при "${subject}". Рискова оценка: ${score}/100. Бъдете внимателни.`;
-  if (verdict === "misleading") return `"${subject}" показва сериозни признаци на подвеждащо или рисково съдържание. Рискова оценка: ${score}/100. Не споделяйте лична информация.`;
-  return `"${subject}" вероятно е измамно. Рискова оценка: ${score}/100. Силно препоръчваме да не взаимодействате с това съдържание.`;
+  if (verdict === "safe") return `Проверката на "${subject}" не откри явни признаци на измама или злонамерено съдържание.`;
+  if (verdict === "insufficient") return `За "${subject}" няма достатъчно данни за категорична оценка. Препоръчваме допълнителна проверка.`;
+  if (verdict === "suspicious") return `Открити са съмнителни характеристики при "${subject}". Рискова оценка: ${score}/100.`;
+  if (verdict === "misleading") return `"${subject}" показва сериозни признаци на подвеждащо или рисково съдържание. Рискова оценка: ${score}/100.`;
+  return `"${subject}" вероятно е измамно. Рискова оценка: ${score}/100. Силно препоръчваме да не взаимодействате.`;
 }
 
 function buildNextSteps(verdict: string): Array<{ action: string; description: string; priority: "high" | "medium" | "low" }> {
-  if (verdict === "safe") {
-    return [
-      { action: "Продължете с внимание", description: "Не са открити явни заплахи, но винаги проверявайте преди да споделяте лична информация", priority: "low" },
-      { action: "Докладвайте при съмнение", description: "Ако все пак нещо изглежда подозрително, използвайте нашия формуляр за докладване", priority: "low" },
-    ];
-  }
-  if (verdict === "insufficient") {
-    return [
-      { action: "Потърсете допълнителна информация", description: "Не разполагаме с достатъчно данни. Проверете дали познавате изпращача", priority: "medium" },
-      { action: "Не споделяйте лични данни", description: "Докато не сте сигурни, въздържайте се от въвеждане на пароли или лична информация", priority: "medium" },
-    ];
-  }
-  if (verdict === "suspicious") {
-    return [
-      { action: "Не кликвайте върху линкове", description: "Избягвайте взаимодействие с тази страница до допълнителна проверка", priority: "high" },
-      { action: "Предупредете близки", description: "Ако сте получили това в съобщение, предупредете изпращача за риска", priority: "medium" },
-      { action: "Докладвайте", description: "Помогнете ни да защитим общността, като докладвате това съдържание", priority: "medium" },
-    ];
-  }
+  if (verdict === "safe") return [
+    { action: "Продължете с внимание", description: "Не са открити явни заплахи, но проверявайте преди да споделяте лична информация", priority: "low" },
+  ];
+  if (verdict === "insufficient") return [
+    { action: "Потърсете допълнителна информация", description: "Проверете дали познавате изпращача", priority: "medium" },
+    { action: "Не споделяйте лични данни", description: "Въздържайте се от въвеждане на пароли или лична информация", priority: "medium" },
+  ];
+  if (verdict === "suspicious") return [
+    { action: "Не кликвайте върху линкове", description: "Избягвайте взаимодействие с тази страница", priority: "high" },
+    { action: "Предупредете близки", description: "Ако сте получили това в съобщение, предупредете изпращача", priority: "medium" },
+    { action: "Докладвайте", description: "Помогнете ни да защитим общността", priority: "medium" },
+  ];
   return [
     { action: "Не взаимодействайте!", description: "Не кликвайте, не въвеждайте данни, не споделяйте с близки", priority: "high" },
     { action: "Докладвайте незабавно", description: "Докладвайте на нашия екип и на CERT Bulgaria (cert@comsoc.bg)", priority: "high" },
@@ -62,66 +51,46 @@ function buildNextSteps(verdict: string): Array<{ action: string; description: s
 }
 
 export async function checkUrl(input: string): Promise<PipelineResult> {
-  const signals: Signal[] = [];
-  let score = 15;
+  try {
+    return await aiCheck("url", input);
+  } catch {
+    const signals = [];
+    let score = 15;
+    const domain = extractDomain(input);
 
-  const domain = extractDomain(input);
-
-  for (const p of KNOWN_SCAM_PATTERNS) {
-    if (p.pattern.test(input)) {
-      score += p.weight * 100;
-      signals.push({
-        id: `risk-${signals.length}`,
-        label: p.label,
-        description: p.desc,
-        weight: p.weight,
-        isRisk: true,
-      });
+    for (const p of KNOWN_SCAM_PATTERNS) {
+      if (p.pattern.test(input)) {
+        score += p.weight * 100;
+        signals.push({ id: `risk-${signals.length}`, label: p.label, description: p.desc, weight: p.weight, isRisk: true });
+      }
     }
-  }
 
-  for (const p of SAFE_INDICATORS) {
-    if (p.pattern.test(input)) {
-      score += p.weight * 100;
-      signals.push({
-        id: `safe-${signals.length}`,
-        label: p.label,
-        description: p.desc,
-        weight: p.weight,
-        isRisk: false,
-      });
+    for (const p of SAFE_INDICATORS) {
+      if (p.pattern.test(input)) {
+        score += p.weight * 100;
+        signals.push({ id: `safe-${signals.length}`, label: p.label, description: p.desc, weight: p.weight, isRisk: false });
+      }
     }
+
+    if (signals.length === 0) {
+      signals.push({ id: "no-signals", label: "Няма разпознати сигнали", description: "Не са открити явни рискови сигнали за този URL", weight: 0, isRisk: false });
+      score = 30;
+    }
+
+    score = Math.max(0, Math.min(100, score));
+    const verdict = scoreToVerdict(score);
+
+    return {
+      verdict,
+      verdictLabel: verdictToLabel(verdict),
+      riskScore: score,
+      confidence: 55,
+      summary: buildSummary(verdict, score, domain),
+      signals,
+      evidence: [
+        { source: "Анализ на структурата на URL", finding: `Домейнът "${domain}" е анализиран за структурни рискове.`, url: null },
+      ],
+      nextSteps: buildNextSteps(verdict),
+    };
   }
-
-  if (signals.length === 0) {
-    signals.push({
-      id: "no-signals",
-      label: "Няма разпознати сигнали",
-      description: "Не са открити явни рискови или защитни сигнали за този URL",
-      weight: 0,
-      isRisk: false,
-    });
-    score = 30;
-  }
-
-  score = Math.max(0, Math.min(100, score));
-  const verdict = scoreToVerdict(score);
-
-  const evidence: Evidence[] = [
-    {
-      source: "Анализ на структурата на URL",
-      finding: `Домейнът "${domain}" е анализиран за структурни рискове. ${score > 50 ? "Открити са тревожни характеристики." : "Не са открити явни структурни проблеми."}`,
-      url: null,
-    },
-    {
-      source: "TODO: Google Web Risk",
-      finding: "Проверката срещу базата данни за известни заплахи е запазена за бъдеща интеграция",
-      url: null,
-    },
-  ];
-
-  const nextSteps = buildNextSteps(verdict);
-  const summary = buildSummary(verdict, score, domain);
-
-  return { verdict, verdictLabel: verdictToLabel(verdict), riskScore: score, confidence: 55, summary, signals, evidence, nextSteps };
 }

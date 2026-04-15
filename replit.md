@@ -67,6 +67,23 @@ Mock pipelines in `artifacts/api-server/src/lib/pipeline/`:
 - `PATCH /api/admin/reports/:id` — update report (notes, status)
 - `GET /api/admin/stats` — admin dashboard stats
 
+## WordPress Integration
+
+Two WordPress-ready files are in the `wordpress/` directory:
+
+- **`wordpress/truenewsscanner.php`** — WordPress plugin. Upload to `wp-content/plugins/` and activate. Then use shortcode `[truenewsscanner]` on any page or post.
+  - Shortcode options: `[truenewsscanner height="800"]`, `[truenewsscanner tab="message"]`, `[truenewsscanner url="https://your-url"]`
+  - Includes a Settings page under WordPress Admin > Settings > TrueNewsScanner
+- **`wordpress/embed-snippet.html`** — Plain iframe embed code. Paste into any HTML block, theme editor, or website builder.
+
+## AI Integration (OpenAI)
+
+All 4 check pipelines (URL, phone, message, news) now use OpenAI `gpt-5-nano` for real AI-powered analysis in Bulgarian.
+- Charges billed to Replit AI credits (no OpenAI API key needed)
+- Automatic fallback to regex-based analysis if AI is unavailable
+- 25-second timeout per AI call before fallback kicks in
+- Model: `gpt-5-nano` (fastest, optimized for high-volume tasks)
+
 ## Future Integrations (TODOs)
 
 - Google Web Risk API (URL safety)
