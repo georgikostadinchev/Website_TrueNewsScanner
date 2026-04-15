@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrueNewsScanner — Проверка за измами и дезинформация</title>
+  <meta name="description" content="Провери дали линк, телефонен номер, съобщение или новина е измама. Безплатна проверка на български." />
+
+  <script>
+    // ================================================================
+    // НАСТРОЙКИ — СМЕНЕТЕ САМО ТЕЗИ 2 РЕДА
+    // ================================================================
+    // API_URL: URL на вашето TrueNewsScanner Replit приложение
+    // Пример: "https://truenewsscanner.yourusername.replit.app"
+    var API_URL = "https://YOUR-APP.replit.app";
+
+    // REPORT_URL: URL на страницата за докладване (оставете "" за скриване)
+    var REPORT_URL = "https://YOUR-APP.replit.app/report";
+    // ================================================================
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f7fa;
+      color: #1a202c;
+      min-height: 100vh;
+    }
+
+    /* NAV */
+    nav {
+      background: #0f1b33;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      color: #fff;
+      font-size: 20px;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-logo span { color: #3b82f6; }
+    .nav-link {
+      color: #94a3b8;
+      text-decoration: none;
+      font-size: 14px;
+      transition: color .2s;
+    }
+    .nav-link:hover { color: #fff; }
+
+    /* HERO */
+    .hero {
+      background: linear-gradient(160deg, #0f1b33 0%, #1e3a5f 100%);
+      padding: 64px 24px 80px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(59,130,246,.15);
+      border: 1px solid rgba(59,130,246,.3);
+      color: #93c5fd;
+      font-size: 13px;
+      padding: 6px 16px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(28px, 6vw, 52px);
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+    .hero h1 span { color: #3b82f6; }
+    .hero-sub {
+      color: #94a3b8;
+      font-size: 16px;
+      max-width: 520px;
+      margin: 0 auto 8px;
+      line-height: 1.6;
+    }
+    .hero-disclaimer {
+      color: #64748b;
+      font-size: 13px;
+      margin-bottom: 0;
+    }
+
+    /* FORM CARD */
+    .form-wrapper {
+      max-width: 680px;
+      margin: -48px auto 48px;
+      padding: 0 16px;
+      position: relative;
+      z-index: 10;
+    }
+    .form-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.12);
+      padding: 28px;
+    }
+
+    /* TABS */
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      border: 1.5px solid #e2e8f0;
+      background: #fff;
+      color: #64748b;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 9px 6px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all .18s;
+    }
+    .tab-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+    .tab-btn.active { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; font-weight: 600; }
+
+    /* FORM FIELDS */
+    .field-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .field-hint {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 6px;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 15px;
+      color: #1a202c;
+      background: #fff;
+      outline: none;
+      transition: border-color .18s;
+      font-family: inherit;
+    }
+    input[type="text"]:focus, textarea:focus { border-color: #3b82f6; }
+    textarea { resize: vertical; min-height: 100px; }
+
+    .btn-check {
+      width: 100%;
+      margin-top: 16px;
+      background: #1d4ed8;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background .18s, transform .1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-check:hover { background: #1e40af; }
+    .btn-check:active { transform: scale(.98); }
+    .btn-check:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    /* SPINNER */
+    .spinner {
+      width: 18px; height: 18px;
+      border: 2.5px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* RESULT */
+    .result-section { display: none; }
+    .result-section.visible { display: block; }
+
+    .result-card {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.08);
+      padding: 28px;
+      margin-bottom: 16px;
+    }
+
+    /* VERDICT */
+    .verdict-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .verdict-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .verdict-badge.safe    { background: #dcfce7; color: #15803d; }
+    .verdict-badge.insuf   { background: #f1f5f9; color: #475569; }
+    .verdict-badge.sus     { background: #fef9c3; color: #92400e; }
+    .verdict-badge.misl    { background: #ffedd5; color: #c2410c; }
+    .verdict-badge.scam    { background: #fee2e2; color: #b91c1c; }
+
+    .confidence-pill {
+      background: #f1f5f9;
+      color: #475569;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 999px;
+    }
+
+    /* RISK METER */
+    .risk-meter-wrap { margin-bottom: 16px; }
+    .risk-header { display: flex; justify-content: space-between; font-size: 13px; color: #64748b; margin-bottom: 6px; }
+    .risk-bar-bg {
+      height: 10px;
+      background: #e2e8f0;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .risk-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width .6s ease;
+    }
+    .risk-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+    .summary-text {
+      font-size: 15px;
+      color: #374151;
+      line-height: 1.7;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 10px;
+      border-left: 3px solid #3b82f6;
+    }
+
+    /* SECTIONS */
+    .section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* SIGNALS */
+    .signal-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .signal-item.risk   { background: #fff5f5; border: 1px solid #fecaca; }
+    .signal-item.safe-s { background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .signal-item.neutral { background: #f8fafc; border: 1px solid #e2e8f0; }
+    .signal-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-top: 5px;
+      flex-shrink: 0;
+    }
+    .signal-dot.red  { background: #ef4444; }
+    .signal-dot.green { background: #22c55e; }
+    .signal-dot.gray  { background: #94a3b8; }
+    .signal-name { font-size: 13px; font-weight: 600; color: #1e293b; }
+    .signal-desc { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+    /* EVIDENCE */
+    .evidence-item {
+      padding: 12px;
+      background: #f8fafc;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      margin-bottom: 8px;
+    }
+    .evidence-source { font-size: 12px; font-weight: 600; color: #3b82f6; margin-bottom: 4px; }
+    .evidence-finding { font-size: 13px; color: #374151; }
+
+    /* NEXT STEPS */
+    .step-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .step-item.high   { background: #fff5f5; border: 1px solid #fca5a5; }
+    .step-item.medium { background: #fffbeb; border: 1px solid #fcd34d; }
+    .step-item.low    { background: #f0fdf4; border: 1px solid #86efac; }
+    .step-priority {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .step-priority.high   { background: #fca5a5; color: #991b1b; }
+    .step-priority.medium { background: #fcd34d; color: #92400e; }
+    .step-priority.low    { background: #86efac; color: #14532d; }
+    .step-action { font-size: 14px; font-weight: 600; color: #1e293b; }
+    .step-desc   { font-size: 13px; color: #64748b; margin-top: 3px; }
+
+    /* ERROR */
+    .error-box {
+      background: #fff5f5;
+      border: 1.5px solid #fca5a5;
+      border-radius: 10px;
+      padding: 16px;
+      color: #b91c1c;
+      font-size: 14px;
+      display: none;
+    }
+    .error-box.visible { display: block; }
+
+    /* NEW CHECK BTN */
+    .btn-new {
+      background: #f1f5f9;
+      color: #1e293b;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 11px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .18s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .btn-new:hover { background: #e2e8f0; }
+
+    /* FOOTER */
+    footer {
+      background: #0f1b33;
+      color: #64748b;
+      text-align: center;
+      padding: 24px;
+      font-size: 13px;
+      margin-top: 48px;
+    }
+    footer a { color: #93c5fd; text-decoration: none; }
+
+    @media (max-width: 480px) {
+      .tabs { grid-template-columns: repeat(2, 1fr); }
+      .hero { padding: 48px 16px 72px; }
+      .verdict-row { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    True<span>News</span>Scanner
+  </a>
+  <div id="nav-report" style="display:none;">
+    <a class="nav-link" id="nav-report-link" href="#">Докладвай</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <div class="hero-badge">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Безплатна проверка за всеки
+  </div>
+  <h1>Провери дали това е<br><span>истина или измама</span></h1>
+  <p class="hero-sub">Въведете линк, телефонен номер, съобщение или новина и получете оценка, базирана на реални сигнали.</p>
+  <p class="hero-disclaimer">Продуктът предоставя оценки, базирани на доказателства — не претендира за абсолютна истина.</p>
+</div>
+
+<div class="form-wrapper">
+
+  <!-- ERROR -->
+  <div class="error-box" id="error-box">
+    Неуспешна връзка с API. Проверете API_URL настройката в горната част на файла.
+  </div>
+
+  <!-- CHECK FORM -->
+  <div class="form-card" id="form-section">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="url" onclick="switchTab('url')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Линк
+      </button>
+      <button class="tab-btn" data-tab="phone" onclick="switchTab('phone')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.77a16 16 0 0 0 6.29 6.29l1.41-1.41a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Телефон
+      </button>
+      <button class="tab-btn" data-tab="message" onclick="switchTab('message')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Съобщение
+      </button>
+      <button class="tab-btn" data-tab="news" onclick="switchTab('news')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6z"/></svg>
+        Новина
+      </button>
+    </div>
+
+    <div id="tab-url">
+      <label class="field-label" for="input-url">Поставете линка, който искате да проверите:</label>
+      <input type="text" id="input-url" placeholder="https://example.com/..." />
+      <p class="field-hint">Пример: https://спечелихте.bg/награда или https://bank-verify.ru/login</p>
+    </div>
+
+    <div id="tab-phone" style="display:none;">
+      <label class="field-label" for="input-phone">Въведете телефонния номер:</label>
+      <input type="text" id="input-phone" placeholder="+359 88 123 4567" />
+      <p class="field-hint">Пример: +359 700 123 456 или 0888 111 222</p>
+    </div>
+
+    <div id="tab-message" style="display:none;">
+      <label class="field-label" for="input-message">Поставете съобщението:</label>
+      <textarea id="input-message" placeholder="Поставете SMS или съобщение тук..."></textarea>
+      <p class="field-hint">Поставете цялото съобщение — колкото повече текст, толкова по-точна оценката</p>
+    </div>
+
+    <div id="tab-news" style="display:none;">
+      <label class="field-label" for="input-news">Поставете заглавието или текста на новината:</label>
+      <textarea id="input-news" placeholder="Поставете заглавие или текст на новина..."></textarea>
+      <p class="field-hint">Поставете заглавие, абзац или цял текст на новината</p>
+    </div>
+
+    <button class="btn-check" id="btn-check" onclick="doCheck()">
+      <div class="spinner" id="spinner"></div>
+      <span id="btn-text">Провери сега</span>
+    </button>
+  </div>
+
+  <!-- RESULT SECTION -->
+  <div class="result-section" id="result-section">
+
+    <button class="btn-new" onclick="resetForm()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 5l-7 7 7 7"/></svg>
+      Нова проверка
+    </button>
+
+    <!-- VERDICT CARD -->
+    <div class="result-card">
+      <div class="verdict-row">
+        <div class="verdict-badge" id="verdict-badge"></div>
+        <span class="confidence-pill" id="confidence-pill"></span>
+      </div>
+
+      <div class="risk-meter-wrap">
+        <div class="risk-header">
+          <span>Рискова оценка</span>
+          <span id="risk-score-label"></span>
+        </div>
+        <div class="risk-bar-bg">
+          <div class="risk-bar-fill" id="risk-bar-fill" style="width:0%"></div>
+        </div>
+        <div class="risk-label" id="risk-bar-label"></div>
+      </div>
+
+      <div class="summary-text" id="summary-text"></div>
+    </div>
+
+    <!-- SIGNALS -->
+    <div class="result-card" id="signals-card">
+      <div class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Открити сигнали
+      </div>
+      <div id="signals-list"></div>
+    </div>
+
+    <!-- EVIDENCE -->
+    <div class="result-card" id="evidence-card">
+      <div class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Доказателствена база
+      </div>
+      <div id="evidence-list"></div>
+    </div>
+
+    <!-- NEXT STEPS -->
+    <div class="result-card" id="steps-card">
+      <div class="section-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Препоръчани действия
+      </div>
+      <div id="steps-list"></div>
+    </div>
+
+    <div style="text-align:center;margin-top:8px;" id="report-section"></div>
+  </div>
+
+</div>
+
+<footer>
+  <strong style="color:#94a3b8;">TrueNewsScanner</strong> &nbsp;|&nbsp;
+  Продуктът не претендира за абсолютна истина. Предоставя оценки, базирани на доказателства и рискова оценка.
+</footer>
+
+<script>
+(function() {
+  var currentTab = "url";
+
+  // Show report link in nav if REPORT_URL is set
+  if (typeof REPORT_URL !== "undefined" && REPORT_URL && !REPORT_URL.includes("YOUR-APP")) {
+    document.getElementById("nav-report").style.display = "block";
+    document.getElementById("nav-report-link").href = REPORT_URL;
+  }
+
+  window.switchTab = function(tab) {
+    currentTab = tab;
+    document.querySelectorAll(".tab-btn").forEach(function(b) {
+      b.classList.toggle("active", b.dataset.tab === tab);
+    });
+    ["url","phone","message","news"].forEach(function(t) {
+      document.getElementById("tab-" + t).style.display = t === tab ? "block" : "none";
+    });
+  };
+
+  window.doCheck = function() {
+    var input = getInput();
+    if (!input || input.trim().length < 2) {
+      showError("Моля въведете текст за проверка (минимум 2 символа).");
+      return;
+    }
+
+    if (typeof API_URL === "undefined" || API_URL.includes("YOUR-APP")) {
+      showError("API_URL не е конфигуриран. Отворете файла и сменете YOUR-APP.replit.app с реалния URL на приложението.");
+      return;
+    }
+
+    setLoading(true);
+    hideError();
+
+    fetch(API_URL.replace(/\/$/, "") + "/api/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: currentTab, input: input.trim() })
+    })
+    .then(function(r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      setLoading(false);
+      renderResult(data);
+    })
+    .catch(function(err) {
+      setLoading(false);
+      showError("Грешка при свързване с API: " + err.message + ". Проверете дали API_URL е правилен и дали приложението е публикувано (Deploy).");
+    });
+  };
+
+  window.resetForm = function() {
+    document.getElementById("form-section").style.display = "block";
+    document.getElementById("result-section").classList.remove("visible");
+    hideError();
+    ["url","phone","message","news"].forEach(function(t) {
+      var el = document.getElementById("input-" + t);
+      if (el) el.value = "";
+    });
+  };
+
+  function getInput() {
+    return (document.getElementById("input-" + currentTab) || {}).value || "";
+  }
+
+  function setLoading(on) {
+    var btn = document.getElementById("btn-check");
+    var spinner = document.getElementById("spinner");
+    var txt = document.getElementById("btn-text");
+    btn.disabled = on;
+    spinner.style.display = on ? "block" : "none";
+    txt.textContent = on ? "Проверява се..." : "Провери сега";
+  }
+
+  function showError(msg) {
+    var box = document.getElementById("error-box");
+    box.textContent = msg;
+    box.classList.add("visible");
+  }
+
+  function hideError() {
+    document.getElementById("error-box").classList.remove("visible");
+  }
+
+  function riskColor(score) {
+    if (score < 20) return "#22c55e";
+    if (score < 40) return "#94a3b8";
+    if (score < 60) return "#eab308";
+    if (score < 80) return "#f97316";
+    return "#ef4444";
+  }
+
+  function riskRangeLabel(score) {
+    if (score < 20) return "По-скоро безопасно";
+    if (score < 40) return "Недостатъчно данни";
+    if (score < 60) return "Съмнително";
+    if (score < 80) return "Подвеждащо / висок риск";
+    return "Вероятно измама";
+  }
+
+  function verdictClass(verdict) {
+    var map = { safe: "safe", insufficient: "insuf", suspicious: "sus", misleading: "misl", scam: "scam" };
+    return map[verdict] || "insuf";
+  }
+
+  function verdictIcon(verdict) {
+    if (verdict === "safe") return "&#10003;";
+    if (verdict === "insufficient") return "&#8253;";
+    if (verdict === "suspicious") return "&#9888;";
+    if (verdict === "misleading") return "&#9888;";
+    return "&#10007;";
+  }
+
+  function renderResult(data) {
+    document.getElementById("form-section").style.display = "none";
+    document.getElementById("result-section").classList.add("visible");
+
+    // Verdict badge
+    var badge = document.getElementById("verdict-badge");
+    badge.className = "verdict-badge " + verdictClass(data.verdict);
+    badge.innerHTML = "<span>" + verdictIcon(data.verdict) + "</span> " + (data.verdictLabel || "Неизвестно");
+
+    // Confidence
+    document.getElementById("confidence-pill").textContent = "Увереност: " + (data.confidence || 0) + "%";
+
+    // Risk bar
+    var score = data.riskScore || 0;
+    document.getElementById("risk-score-label").textContent = score + " / 100";
+    document.getElementById("risk-bar-fill").style.width = score + "%";
+    document.getElementById("risk-bar-fill").style.background = riskColor(score);
+    document.getElementById("risk-bar-label").textContent = riskRangeLabel(score);
+
+    // Summary
+    document.getElementById("summary-text").textContent = data.summary || "";
+
+    // Signals
+    var sigList = document.getElementById("signals-list");
+    sigList.innerHTML = "";
+    (data.signals || []).forEach(function(s) {
+      var cls = s.isRisk ? "risk" : (s.weight < 0 ? "safe-s" : "neutral");
+      var dotCls = s.isRisk ? "red" : (s.weight < 0 ? "green" : "gray");
+      sigList.innerHTML += '<div class="signal-item ' + cls + '">' +
+        '<div class="signal-dot ' + dotCls + '"></div>' +
+        '<div><div class="signal-name">' + esc(s.label) + '</div>' +
+        '<div class="signal-desc">' + esc(s.description) + '</div></div></div>';
+    });
+
+    // Evidence
+    var evList = document.getElementById("evidence-list");
+    evList.innerHTML = "";
+    (data.evidence || []).forEach(function(e) {
+      evList.innerHTML += '<div class="evidence-item">' +
+        '<div class="evidence-source">' + esc(e.source) + '</div>' +
+        '<div class="evidence-finding">' + esc(e.finding) + '</div></div>';
+    });
+
+    // Next steps
+    var stList = document.getElementById("steps-list");
+    stList.innerHTML = "";
+    (data.nextSteps || []).forEach(function(n) {
+      var p = n.priority || "medium";
+      var pLabel = { high: "Спешно", medium: "Важно", low: "Препоръчително" }[p] || p;
+      stList.innerHTML += '<div class="step-item ' + p + '">' +
+        '<span class="step-priority ' + p + '">' + pLabel + '</span>' +
+        '<div><div class="step-action">' + esc(n.action) + '</div>' +
+        '<div class="step-desc">' + esc(n.description) + '</div></div></div>';
+    });
+
+    // Report link
+    var repSec = document.getElementById("report-section");
+    if (typeof REPORT_URL !== "undefined" && REPORT_URL && !REPORT_URL.includes("YOUR-APP")) {
+      repSec.innerHTML = '<a href="' + REPORT_URL + '" style="color:#3b82f6;font-size:14px;text-decoration:none;">Намерихте нещо подозрително? Докладвайте го тук.</a>';
+    } else {
+      repSec.innerHTML = "";
+    }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function esc(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;");
+  }
+
+  // Allow Enter key to submit
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Enter" && document.getElementById("form-section").style.display !== "none") {
+      var el = document.getElementById("input-" + currentTab);
+      if (el && el.tagName === "INPUT") doCheck();
+    }
+  });
+})();
+</script>
+</body>
+</html>
