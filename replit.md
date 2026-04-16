@@ -33,6 +33,9 @@ Bulgarian-language scam-check and credibility-check platform. Users can check li
 - `/result` — Result page: verdict badge, risk meter, confidence, Bulgarian summary, signals, evidence, next steps
 - `/report` — Report page: form to report suspicious content
 - `/admin` — Admin panel: report queue, filters, moderation notes, status management
+- `/methodology` — Transparency page: explains heuristic signals per content type, AI layer, scoring thresholds
+- `/privacy` — Privacy Policy: data collected, retention, user rights, cookies (Bulgarian)
+- `/terms` — Terms of Use: service description, liability limits, prohibited use, applicable law (Bulgarian)
 
 ## Verdict System
 

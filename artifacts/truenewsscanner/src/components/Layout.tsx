@@ -185,14 +185,37 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       <footer className="mt-auto border-t border-border bg-muted/30">
         <div className="max-w-6xl mx-auto px-6 py-10">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3 opacity-60 hover:opacity-100 transition-opacity">
-              <ShieldCheck className="w-6 h-6 text-primary" />
-              <span className="font-bold text-foreground tracking-tight">TrueNewsScanner</span>
+          <div className="flex flex-col md:flex-row items-start justify-between gap-8">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-primary" />
+                <span className="font-bold text-foreground tracking-tight">TrueNewsScanner</span>
+              </div>
+              <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+                Инструмент за гражданска защита. Предоставя вероятностни оценки, базирани на евристики и изкуствен интелект, без претенция за абсолютна истина.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                © {new Date().getFullYear()} TrueNewsScanner. Всички права запазени.
+              </p>
             </div>
-            <p className="text-sm font-medium text-muted-foreground text-center md:text-right max-w-md leading-relaxed">
-              Инструмент за гражданска защита. Предоставя оценки, базирани на доказателства, без претенция за абсолютна истина.
-            </p>
+
+            <div className="flex flex-col sm:flex-row gap-8">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-foreground uppercase tracking-widest">Платформа</p>
+                <div className="flex flex-col gap-1.5">
+                  <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Проверка</Link>
+                  <Link href="/report" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Докладвай</Link>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-foreground uppercase tracking-widest">Прозрачност</p>
+                <div className="flex flex-col gap-1.5">
+                  <Link href="/methodology" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Как проверяваме</Link>
+                  <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Поверителност</Link>
+                  <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Общи условия</Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </footer>
