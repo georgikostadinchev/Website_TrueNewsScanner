@@ -66,6 +66,7 @@ async function upsertUser(claims: Record<string, unknown>) {
     profileImageUrl: (claims.profile_image_url || claims.picture) as
       | string
       | null,
+    replUsername: (claims.username ?? claims.preferred_username ?? claims.login ?? null) as string | null,
   };
 
   const [user] = await db
@@ -83,9 +84,11 @@ async function upsertUser(claims: Record<string, unknown>) {
 }
 
 router.get("/auth/user", (req: Request, res: Response) => {
+  const user = req.isAuthenticated() ? req.user : null;
+  const isAdmin = !!(user && req.replUsername && req.replUsername === process.env.REPL_OWNER);
   res.json(
     GetCurrentAuthUserResponse.parse({
-      user: req.isAuthenticated() ? req.user : null,
+      user: user ? { ...user, isAdmin } : null,
     }),
   );
 });
@@ -177,6 +180,7 @@ router.get("/callback", async (req: Request, res: Response) => {
       lastName: dbUser.lastName,
       profileImageUrl: dbUser.profileImageUrl,
     },
+    replUsername: dbUser.replUsername ?? null,
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: tokens.expiresIn() ? now + tokens.expiresIn()! : claims.exp,

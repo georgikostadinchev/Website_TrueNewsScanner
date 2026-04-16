@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Shield, CheckCircle, XCircle, RefreshCw, ChevronDown, ChevronUp, Save, Link2, Phone, MessageSquare, Newspaper } from "lucide-react";
+import { Shield, CheckCircle, XCircle, RefreshCw, ChevronDown, ChevronUp, Save, Link2, Phone, MessageSquare, Newspaper, Lock } from "lucide-react";
 import { useGetAdminStats, useGetAdminReports, useGetAdminReport, useUpdateAdminReport, getGetAdminReportsQueryKey, getGetAdminStatsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@workspace/replit-auth-web";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Чакащ",
@@ -204,11 +205,14 @@ function ReportDetail({ reportId }: { reportId: string }) {
 }
 
 export default function AdminPage() {
+  const { user, isLoading: authLoading } = useAuth();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
 
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetAdminStats();
+  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useGetAdminStats({
+    query: { enabled: !!user?.isAdmin },
+  });
   const { data: reportsData, isLoading: reportsLoading, refetch: refetchReports } = useGetAdminReports(
     {
       ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
@@ -216,7 +220,10 @@ export default function AdminPage() {
       limit: 50,
     },
     {
-      query: { queryKey: getGetAdminReportsQueryKey({ status: statusFilter !== "all" ? (statusFilter as any) : undefined, type: typeFilter !== "all" ? (typeFilter as any) : undefined }) },
+      query: {
+        enabled: !!user?.isAdmin,
+        queryKey: getGetAdminReportsQueryKey({ status: statusFilter !== "all" ? (statusFilter as any) : undefined, type: typeFilter !== "all" ? (typeFilter as any) : undefined }),
+      },
     }
   );
 
@@ -225,6 +232,24 @@ export default function AdminPage() {
   function handleRefresh() {
     refetchStats();
     refetchReports();
+  }
+
+  if (authLoading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-16 flex items-center justify-center">
+        <Skeleton className="h-8 w-48" />
+      </div>
+    );
+  }
+
+  if (!user?.isAdmin) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-24 flex flex-col items-center gap-4 text-center">
+        <Lock className="w-12 h-12 text-slate-400" />
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Нямате достъп</h1>
+        <p className="text-slate-500">Тази страница е достъпна само за администратора.</p>
+      </div>
+    );
   }
 
   return (

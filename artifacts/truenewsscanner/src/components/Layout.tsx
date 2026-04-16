@@ -11,7 +11,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { href: "/", label: "Провери" },
     { href: "/report", label: "Докладвай" },
-    { href: "/admin", label: "Администрация" },
+    ...(user?.isAdmin ? [{ href: "/admin", label: "Администрация" }] : []),
   ];
 
   return (

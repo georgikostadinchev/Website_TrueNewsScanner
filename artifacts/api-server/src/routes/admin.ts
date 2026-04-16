@@ -1,8 +1,11 @@
 import { Router } from "express";
 import { db, reportsTable } from "@workspace/db";
 import { eq, sql, and, inArray } from "drizzle-orm";
+import { requireAdmin } from "../middlewares/requireAdmin";
 
 const router = Router();
+
+router.use("/admin", requireAdmin);
 
 router.get("/admin/reports", async (req, res) => {
   const { status, type, page = "1", limit = "20" } = req.query as Record<string, string>;

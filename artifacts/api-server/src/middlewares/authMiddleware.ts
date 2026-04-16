@@ -16,8 +16,8 @@ declare global {
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;
-
       user?: User | undefined;
+      replUsername?: string | null;
     }
 
     export interface AuthedRequest {
@@ -83,5 +83,6 @@ export async function authMiddleware(
   }
 
   req.user = refreshed.user;
+  req.replUsername = refreshed.replUsername ?? null;
   next();
 }
