@@ -1,0 +1,453 @@
+Task: Deepen deterministic heuristic coverage for all four check pipelines without changing the API contract
+
+Objective:
+Improve the deterministic fallback heuristics for all four check types — URL, phone, message, and news — so the system produces richer, more accurate verdicts even when AI is unavailable.
+
+Important constraints:
+- Do NOT change the API contract
+- Do NOT change RawPipelineResult shape
+- Do NOT add dependencies
+- Do NOT add new routes
+- Do NOT modify types.ts unless absolutely required for typing compatibility, and even then preserve the exact exported shapes
+- Keep all signal labels and descriptions in Bulgarian
+- Preserve the existing base score per pipeline
+- Preserve the existing score clamp logic
+- Keep current summary/evidence/next-step return structure intact
+
+Files to modify only:
+- artifacts/api-server/src/lib/pipeline/url.ts
+- artifacts/api-server/src/lib/pipeline/phone.ts
+- artifacts/api-server/src/lib/pipeline/message.ts
+- artifacts/api-server/src/lib/pipeline/news.ts
+
+Files not to modify:
+- artifacts/api-server/src/lib/pipeline/types.ts
+- routes
+- scoring engine contract
+- API response schema
+
+Global implementation requirements:
+1. Refactor each pipeline toward this structure where useful:
+   - normalize input
+   - extract structured features
+   - apply heuristic rules
+   - deduplicate or cap overlapping signals
+   - return score + signals
+2. Preserve existing base scores:
+   - URL = 15
+   - Phone = 20
+   - Message = 10
+   - News = 20
+3. Preserve final clamp:
+   - Math.max(0, Math.min(100, score))
+4. Preserve existing “no signals” fallback behavior
+5. Avoid false positives:
+   - exact trusted matches should suppress related typo/brand-risk checks
+   - overlapping rules should not inflate score unrealistically
+   - safe signals should only trigger when context strongly supports them
+6. Each pipeline should end with at least 12 meaningful heuristic rules total
+7. Keep code clean and readable with small helpers instead of giant inline regex blocks
+
+--------------------------------------------------
+URL PIPELINE
+File:
+- artifacts/api-server/src/lib/pipeline/url.ts
+
+Implementation goals:
+- Move away from relying only on regex over the full input string
+- Parse the URL and analyze components separately where possible:
+  - protocol
+  - hostname
+  - pathname
+  - query/search params
+  - port
+  - subdomain depth
+
+Suggested helpers:
+- tryParseUrl(input)
+- normalizeHostname(hostname)
+- getSubdomainDepth(hostname)
+- hasRandomLookingPathSegment(pathname)
+- hasRedirectParams(searchParams)
+- isTrustedInstitutionDomain(hostname)
+- isTrustedMediaDomain(hostname)
+
+Risk signals to add:
+1. IP address as hostname
+   - hostname matches IPv4
+   - weight: 0.65
+   - Bulgarian label/description
+
+2. BG bank brand typosquat / imitation
+   - domain contains variants of:
+     - unicredit
+     - fibank
+     - dsk-bank
+     - postbank
+     - raiffeisen
+   - but is NOT an exact trusted domain
+   - weight: 0.75
+
+3. Excessive subdomain depth
+   - more than 3 subdomains
+   - weight: 0.5
+
+4. Non-standard port
+   - explicit port other than 80/443
+   - weight: 0.45
+
+5. Long random-looking path segment
+   - path segment > 60 chars and looks machine-generated
+   - weight: 0.35
+
+6. Redirect chain indicators
+   - multiple redirect=, url=, next=, goto= params
+   - weight: 0.4
+
+7. Mixed TLD squatting
+   - trusted-looking brand/domain followed by extra suffix
+   - example: bta.bg.info
+   - weight: 0.55
+
+8. No TLD / malformed URL
+   - cannot be parsed properly or obviously malformed
+   - weight: 0.3
+
+9. Dangerous scheme
+   - data: or javascript:
+   - weight: 0.9
+
+10. Expanded phishing TLD list
+   - include .top, .click, .gq, .pw, .cc
+   - weight: 0.4
+
+Safe signals to add:
+1. Known Bulgarian institution domain
+   - exact allowlist match only
+   - examples: bnb.bg, mvr.bg, and other official Bulgarian institution domains
+   - weight: -0.4
+
+2. Long-established Bulgarian media
+   - exact match only:
+     - bnt.bg
+     - nova.bg
+     - btv.bg
+     - dir.bg
+     - mediapool.bg
+   - weight: -0.25
+
+Important false-positive rule:
+- Remove or narrow any overly broad “.bg means safe” logic
+- Exact trusted matches must suppress typo-brand warnings for the same brand
+- Redirect-related matches should be grouped/capped so similar params do not overinflate score
+
+--------------------------------------------------
+PHONE PIPELINE
+File:
+- artifacts/api-server/src/lib/pipeline/phone.ts
+
+Implementation goals:
+- Normalize once at the top and run all checks against normalized forms
+- Add an international format helper that converts 08x -> +3598x for prefix matching
+- Separate valid BG mobile logic by named operator groups
+
+Suggested helpers:
+- normalizePhone(input)
+- toInternationalFormat(input)
+- detectBgMobileOperatorPrefix(input)
+- isValidBgLandline(input)
+- isSyntheticPhonePattern(input)
+
+Risk signals to add:
+1. US toll-free / premium style prefixes
+   - +1800, +1888, +1900
+   - weight: 0.4
+
+2. BG premium SMS short code
+   - 5 digits starting with 18
+   - weight: 0.45
+
+3. Synthetic repeated / sequential digits
+   - e.g. 111111111, 123456789
+   - weight: 0.6
+
+4. Unexpected foreign country code
+   - not BG (+359), UK (+44), US (+1), DE (+49)
+   - mild suspicion only
+   - weight: 0.35
+
+5. Invalid Bulgarian international number
+   - starts with +359 but invalid mobile/landline/operator prefix
+   - weight: 0.5
+
+6. Caller ID spoofing indicator
+   - exactly 0000000000 or 9999999999
+   - weight: 0.8
+
+7. Malformed or incomplete format
+   - structurally odd or invalid length
+   - moderate risk
+
+Safe signals to add:
+1. Valid A1 mobile
+   - 087 / 088
+   - weight: -0.15
+
+2. Valid Yettel / Telenor mobile
+   - 089
+   - weight: -0.15
+
+3. Valid Vivacom mobile
+   - 098 / 099
+   - weight: -0.15
+
+4. Valid Bulgarian landline
+   - +359 2 / +359 3x / +359 4x / +359 5x
+   - weight: -0.15
+
+False-positive rules:
+- Do not treat every foreign code as highly suspicious
+- Safe landline should trigger only for structurally valid landline ranges
+- Safe mobile checks should run after normalization and before invalid-prefix inflation
+
+--------------------------------------------------
+MESSAGE PIPELINE
+File:
+- artifacts/api-server/src/lib/pipeline/message.ts
+
+Implementation goals:
+- Keep existing scam phrase coverage
+- Add structured feature extraction rather than only pattern matching
+
+Suggested helpers:
+- normalizeMessage(input)
+- containsIban(input)
+- containsCardLikeNumber(input)
+- containsPasswordRequest(input)
+- containsCredentialRequest(input)
+- containsEmbeddedUrl(input)
+- getCapsRatio(input)
+- countEmoji(input)
+- isTrackingOnlyMessage(input)
+
+Extract features such as:
+- contains URL
+- URL count
+- IBAN presence
+- card-number-like presence
+- uppercase ratio
+- emoji count
+- credential request
+- institution impersonation
+- urgency wording
+
+Risk signals to add:
+1. IBAN or card-like number
+   - BG IBAN or 16-digit card-like number
+   - weight: 0.7
+
+2. Request for personal ID / document data
+   - ЕГН, лична карта, личен номер
+   - weight: 0.65
+
+3. Request for CVV / CVC / PIN
+   - CVV, CVC, ПИН, пин код
+   - weight: 0.8
+
+4. Cryptocurrency request
+   - Bitcoin, BTC, Ethereum, крипто, портфейл, wallet
+   - weight: 0.7
+
+5. Gift card / voucher demand
+   - gift card, ваучер, код за, iTunes, Amazon voucher
+   - weight: 0.65
+
+6. English phishing phrases
+   - click here, verify your account, suspended, unauthorized access
+   - weight: 0.6
+
+7. Excessive CAPS ratio
+   - more than 40% uppercase letters
+   - weight: 0.3
+
+8. Emoji spam
+   - 5 or more emojis
+   - weight: 0.2
+
+9. Embedded URL
+   - contains http:// or https://
+   - weight: 0.25
+
+10. Password request
+   - парола, password, pwd
+   - weight: 0.75
+
+11. Very short message with a single link
+   - under 30 chars and contains URL
+   - weight: 0.45
+
+Safe signals to add:
+1. Formal greeting + named sender
+   - starts with Уважаем / Dear
+   - ends with organization-like sender signature
+   - weight: -0.2
+
+2. Legitimate tracking-only format
+   - looks like BG Post / Econt / Speedy tracking code
+   - no link
+   - no urgency
+   - no credential request
+   - weight: -0.15
+
+False-positive rules:
+- Card-number detection must be boundary-aware
+- IBAN detection should be case-insensitive and boundary-aware
+- CAPS ratio must count letters only
+- Tracking-only safe signal must not trigger if the message includes a link, urgency, or sensitive data request
+- Group credential/payment-related matches to avoid unrealistic score stacking
+
+--------------------------------------------------
+NEWS PIPELINE
+File:
+- artifacts/api-server/src/lib/pipeline/news.ts
+
+Implementation goals:
+- Expand beyond a few generic misinformation regexes
+- Add source-quality, rhetoric, and narrative-risk features
+
+Suggested helpers:
+- hasAttribution(text)
+- hasOfficialAttribution(text)
+- hasBalancedLanguage(text)
+- hasSensationalLanguage(text)
+- hasPoliticalDisinfoMarkers(text)
+- hasHealthMisinformationMarkers(text)
+- hasEconomicClickbaitMarkers(text)
+- hasPunctuationDeficit(text)
+- matchesClickbaitEnding(text)
+
+Extract feature groups:
+- attribution quality
+- sensational rhetoric
+- conspiracy / propaganda markers
+- health misinformation
+- economic clickbait
+- balance indicators
+- punctuation quality
+
+Risk signals to add:
+1. Missing attribution
+   - no journalist/agency mention, no “според”, no “по данни на”
+   - weight: 0.35
+
+2. Emotional superlatives
+   - невероятно, шокиращо, скандално, невиждано
+   - weight: 0.3
+
+3. False urgency / exclusivity
+   - само тук, преди официалното, ексклузивно, преди да изтрие
+   - weight: 0.45
+
+4. BG political disinformation markers
+   - Сорос, дълбока държава, НАТОвска агресия, Брюксел командва
+   - weight: 0.5
+
+5. Health misinformation markers
+   - лекува рак, чудодейно, забранено от фарм, природно лечение победи
+   - weight: 0.55
+
+6. Economic clickbait
+   - Тайната на богатите, банките крият, пасивен доход, работи от вкъщи без опит
+   - weight: 0.5
+
+7. Civil unrest / inflammatory mobilisation
+   - свалете правителството, на улицата, бунт, въстание
+   - weight: 0.45
+
+8. Pro-Kremlin narrative markers
+   - специална операция, нацистки режим в Киев, биолаборатории на САЩ
+   - weight: 0.65
+
+9. No normal punctuation / all-caps style
+   - lacks sentence-ending punctuation or reads like all-caps shouting
+   - weight: 0.25
+
+10. Clickbait title formula
+   - endings like:
+     - …и ето какво се случи
+     - Ще се шашнете
+     - Не повярвахте
+   - weight: 0.4
+
+Safe signals to add:
+1. Known Bulgarian institution cited in attribution-like context
+   - БТА, МВР, НСИ, БНБ, Министерство
+   - weight: -0.25
+
+2. Clear attribution language
+   - по данни на, според официални
+   - weight: -0.2
+
+3. Balanced language indicators
+   - от една страна … от друга
+   - спорен въпрос
+   - различни мнения
+   - weight: -0.15
+
+False-positive rules:
+- Missing attribution should not trigger for very short text where attribution cannot be judged reliably
+- Political markers should not automatically mean misinformation if the text appears neutral or analytical
+- Institution safe signal should only apply in attribution-like context, not anywhere in the body
+- Sensationalism-related rules should be grouped/capped to avoid overcounting
+
+--------------------------------------------------
+DEDUPING / CATEGORY CAPS
+Implement lightweight overlap control without changing the response shape.
+
+Examples:
+- URL redirect-related cluster should not stack excessively
+- Message credential/payment cluster should not stack excessively
+- News sensationalism cluster should not stack excessively
+
+A simple internal approach is acceptable:
+- track applied categories
+- skip or soften near-duplicate signals
+- or cap contribution for related groups
+
+--------------------------------------------------
+SUMMARY / EVIDENCE / NEXT STEPS
+Do not change the return schema.
+Keep existing result sections intact:
+- heuristicSummary
+- heuristicEvidence
+- heuristicNextSteps
+
+You may improve wording slightly if needed, but do not change structure.
+
+--------------------------------------------------
+ACCEPTANCE CRITERIA
+- pnpm --filter @workspace/api-server run typecheck passes with 0 new errors
+- RawPipelineResult shape remains identical
+- No schema changes
+- No route changes
+- No dependency additions
+- Base score remains unchanged in all 4 pipelines
+- Clamp logic remains unchanged
+- Each pipeline ends up with at least 12 meaningful heuristic rules
+- URL logic uses parsed URL components instead of only full-input regex
+- Safe exact-match rules suppress related false positives where appropriate
+- Overlapping heuristic clusters are deduplicated or capped
+- All signal labels and descriptions are in Bulgarian
+- Existing no-signals fallback behavior remains intact
+
+Execution instructions:
+1. First inspect the current implementation in the four pipeline files
+2. Apply the refactor carefully without changing exported contracts
+3. Keep the code readable and maintainable
+4. After editing, run:
+   pnpm --filter @workspace/api-server run typecheck
+5. If typecheck fails, fix the issues
+6. Return:
+   - what changed per file
+   - any false-positive guards added
+   - confirmation that typecheck passes
