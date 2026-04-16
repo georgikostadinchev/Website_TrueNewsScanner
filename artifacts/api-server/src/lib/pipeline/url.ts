@@ -272,14 +272,26 @@ function runUrlHeuristic(input: string): { score: number; signals: Signal[] } {
     score += 40;
   }
 
+  // --- No TLD / hostname without dot (parseable but structurally suspicious) ---
+  if (parsed.valid && !hostname.includes(".")) {
+    signals.push({
+      id: "no-tld",
+      label: "Домейн без TLD",
+      description: "Хост адресът не съдържа домейн от най-високо ниво (TLD) — нетипично за публичен уебсайт",
+      weight: 0.3,
+      isRisk: true,
+    });
+    score += 30;
+  }
+
   // --- TLD squatting: trusted domain name embedded in suspicious TLD ---
   const trustedBgNames = ["bta", "bnb", "mvr", "nap", "nsi", "fibank", "dsk", "postbank"];
   const isTldSquat = trustedBgNames.some((name) => norm.startsWith(name + ".bg.") || norm.includes("." + name + ".bg."));
   if (!isTrusted && isTldSquat) {
     signals.push({
       id: "tld-squat",
-      label: "Злоупотреба с TLD — имитация",
-      description: "Домейнът включва разпознаваемо BG brandname последвано от допълнително TLD разширение (напр. bta.bg.info)",
+      label: "Злоупотреба с TLD — имитация на български домейн",
+      description: "Домейнът включва разпознаваема BG марка последвана от допълнително TLD разширение (напр. bta.bg.info)",
       weight: 0.55,
       isRisk: true,
     });

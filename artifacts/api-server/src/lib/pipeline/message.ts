@@ -178,8 +178,8 @@ function runMessageHeuristic(input: string): { score: number; signals: Signal[] 
     },
     {
       id: "gift-card",
-      label: "Искане на ваучер / gift card",
-      description: "Съобщението иска покупка или изпращане на ваучер или gift card — класическа измамна тактика",
+      label: "Искане на ваучер или подаръчна карта",
+      description: "Съобщението иска покупка или изпращане на ваучер или подаръчна карта — класическа измамна тактика",
       weight: 0.65,
       pts: 65,
       triggered: /gift\s*card|ваучер|код за|iTunes|Amazon\s*voucher|Google\s*Play/i.test(msg),

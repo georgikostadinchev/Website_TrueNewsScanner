@@ -57,8 +57,8 @@ function runPhoneHeuristic(input: string): { score: number; signals: Signal[] } 
   if (/^(0{9,}|9{9,})$/.test(digitsOnly)) {
     signals.push({
       id: "spoofed-caller-id",
-      label: "Подправен Caller ID",
-      description: "Номерът съдържа само нули или девятки — явен признак за подправен идентификатор",
+      label: "Подправен идентификатор на обаждащия",
+      description: "Номерът съдържа само нули или девятки — явен признак за подправен идентификатор на обаждащия",
       weight: 0.8,
       isRisk: true,
     });
