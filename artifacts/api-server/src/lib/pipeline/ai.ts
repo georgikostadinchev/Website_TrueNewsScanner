@@ -61,7 +61,7 @@ export async function aiCheck(type: CheckType, input: string): Promise<PipelineR
 
     const aiCall = openai.chat.completions.create({
       model: "gpt-5-nano",
-      max_completion_tokens: 1024,
+      max_completion_tokens: 8192,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
