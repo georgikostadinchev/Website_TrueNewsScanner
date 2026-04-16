@@ -16,5 +16,4 @@ export interface AuthUser {
   lastName: string | null;
   /** @nullable */
   profileImageUrl: string | null;
-  isAdmin: boolean;
 }

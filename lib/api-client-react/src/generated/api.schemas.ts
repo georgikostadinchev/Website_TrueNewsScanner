@@ -251,6 +251,118 @@ export interface ErrorResponse {
   message: string;
 }
 
+export interface CheckSummary {
+  id: string;
+  type: CheckType;
+  input: string;
+  verdict: Verdict;
+  verdictLabel: string;
+  riskScore: number;
+  checkedAt: string;
+}
+
+export interface CheckSearchResult {
+  results: CheckSummary[];
+  count: number;
+}
+
+export interface ThreatEntry {
+  id: string;
+  type: CheckType;
+  input: string;
+  verdict: Verdict;
+  verdictLabel: string;
+  riskScore: number;
+  confidence: number;
+  summary: string;
+  checkedAt: string;
+}
+
+export interface TopThreatList {
+  threats: ThreatEntry[];
+  count: number;
+}
+
+export type FeedbackRating =
+  (typeof FeedbackRating)[keyof typeof FeedbackRating];
+
+export const FeedbackRating = {
+  helpful: "helpful",
+  misleading: "misleading",
+  inaccurate: "inaccurate",
+} as const;
+
+export interface FeedbackRequest {
+  checkId: string;
+  rating: FeedbackRating;
+  comment?: string | null;
+}
+
+export interface FeedbackResponse {
+  id: string;
+  message: string;
+  createdAt: string;
+}
+
+export type FeedbackSummaryRatings = {
+  helpful: number;
+  misleading: number;
+  inaccurate: number;
+};
+
+export interface FeedbackSummary {
+  checkId: string;
+  total: number;
+  ratings: FeedbackSummaryRatings;
+}
+
+export interface DailyTrendPoint {
+  date: string;
+  count: number;
+}
+
+export type PublicStatsByType = {
+  url: number;
+  phone: number;
+  message: number;
+  news: number;
+};
+
+export type PublicStatsByVerdict = {
+  safe: number;
+  insufficient: number;
+  suspicious: number;
+  misleading: number;
+  scam: number;
+};
+
+export type PublicStatsCommunity = {
+  totalReports: number;
+  reviewedReports: number;
+};
+
+export type PublicStatsFeedback = {
+  total: number;
+  helpful: number;
+  /** Percentage of feedback marked helpful, null if no feedback yet */
+  accuracyRate: number | null;
+};
+
+export interface PublicStats {
+  totalChecks: number;
+  todayChecks: number;
+  scamsDetected: number;
+  suspiciousDetected: number;
+  safeCount: number;
+  /** Percentage of checks that were scam or suspicious */
+  riskRate: number;
+  byType: PublicStatsByType;
+  byVerdict: PublicStatsByVerdict;
+  community: PublicStatsCommunity;
+  feedback: PublicStatsFeedback;
+  dailyTrend: DailyTrendPoint[];
+}
+
 /**
  * Opaque session token — `Bearer <sid>`.
  */
@@ -281,6 +393,30 @@ export const GetAdminReportsType = {
   message: "message",
   news: "news",
 } as const;
+
+export type SearchChecksParams = {
+  /**
+   * Search query (partial match on input)
+   * @minLength 2
+   */
+  q: string;
+  /**
+   * Filter by check type
+   */
+  type?: CheckType;
+  /**
+   * @maximum 50
+   */
+  limit?: number;
+};
+
+export type GetTopThreatsParams = {
+  /**
+   * @maximum 100
+   */
+  limit?: number;
+  type?: CheckType;
+};
 
 export type BeginBrowserLoginParams = {
   returnTo?: string;

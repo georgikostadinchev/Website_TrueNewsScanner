@@ -24,17 +24,25 @@ import type {
   BeginBrowserLoginParams,
   CheckRequest,
   CheckResult,
+  CheckSearchResult,
   ErrorEnvelope,
   ErrorResponse,
+  FeedbackRequest,
+  FeedbackResponse,
+  FeedbackSummary,
   GetAdminReportsParams,
+  GetTopThreatsParams,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   LogoutSuccess,
   MobileTokenExchangeRequest,
   MobileTokenExchangeSuccess,
+  PublicStats,
   RecentCheckStats,
   ReportRequest,
   ReportResponse,
+  SearchChecksParams,
+  TopThreatList,
   UpdateReportRequest,
 } from "./api.schemas";
 
@@ -710,6 +718,537 @@ export function useGetAdminStats<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetAdminStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Retrieve a specific past check result by its UUID
+ * @summary Get a check result by ID
+ */
+export const getGetCheckByIdUrl = (id: string) => {
+  return `/api/check/${id}`;
+};
+
+export const getCheckById = async (
+  id: string,
+  options?: RequestInit,
+): Promise<CheckResult> => {
+  return customFetch<CheckResult>(getGetCheckByIdUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCheckByIdQueryKey = (id: string) => {
+  return [`/api/check/${id}`] as const;
+};
+
+export const getGetCheckByIdQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCheckById>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCheckById>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCheckByIdQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCheckById>>> = ({
+    signal,
+  }) => getCheckById(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCheckById>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCheckByIdQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCheckById>>
+>;
+export type GetCheckByIdQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a check result by ID
+ */
+
+export function useGetCheckById<
+  TData = Awaited<ReturnType<typeof getCheckById>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCheckById>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCheckByIdQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Look up previously checked inputs by partial match
+ * @summary Search prior check results
+ */
+export const getSearchChecksUrl = (params: SearchChecksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/checks/search?${stringifiedParams}`
+    : `/api/checks/search`;
+};
+
+export const searchChecks = async (
+  params: SearchChecksParams,
+  options?: RequestInit,
+): Promise<CheckSearchResult> => {
+  return customFetch<CheckSearchResult>(getSearchChecksUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getSearchChecksQueryKey = (params?: SearchChecksParams) => {
+  return [`/api/checks/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getSearchChecksQueryOptions = <
+  TData = Awaited<ReturnType<typeof searchChecks>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: SearchChecksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchChecks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getSearchChecksQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof searchChecks>>> = ({
+    signal,
+  }) => searchChecks(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof searchChecks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type SearchChecksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof searchChecks>>
+>;
+export type SearchChecksQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Search prior check results
+ */
+
+export function useSearchChecks<
+  TData = Awaited<ReturnType<typeof searchChecks>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  params: SearchChecksParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof searchChecks>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getSearchChecksQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns the highest-risk scam and suspicious entries
+ * @summary Get top confirmed threats
+ */
+export const getGetTopThreatsUrl = (params?: GetTopThreatsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/checks/top-threats?${stringifiedParams}`
+    : `/api/checks/top-threats`;
+};
+
+export const getTopThreats = async (
+  params?: GetTopThreatsParams,
+  options?: RequestInit,
+): Promise<TopThreatList> => {
+  return customFetch<TopThreatList>(getGetTopThreatsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTopThreatsQueryKey = (params?: GetTopThreatsParams) => {
+  return [`/api/checks/top-threats`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetTopThreatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTopThreats>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetTopThreatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTopThreats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTopThreatsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTopThreats>>> = ({
+    signal,
+  }) => getTopThreats(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTopThreats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTopThreatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTopThreats>>
+>;
+export type GetTopThreatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get top confirmed threats
+ */
+
+export function useGetTopThreats<
+  TData = Awaited<ReturnType<typeof getTopThreats>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetTopThreatsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTopThreats>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTopThreatsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Rate a check result as helpful, misleading, or inaccurate
+ * @summary Submit feedback on a check result
+ */
+export const getSubmitFeedbackUrl = () => {
+  return `/api/feedback`;
+};
+
+export const submitFeedback = async (
+  feedbackRequest: FeedbackRequest,
+  options?: RequestInit,
+): Promise<FeedbackResponse> => {
+  return customFetch<FeedbackResponse>(getSubmitFeedbackUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(feedbackRequest),
+  });
+};
+
+export const getSubmitFeedbackMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitFeedback>>,
+    TError,
+    { data: BodyType<FeedbackRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitFeedback>>,
+  TError,
+  { data: BodyType<FeedbackRequest> },
+  TContext
+> => {
+  const mutationKey = ["submitFeedback"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitFeedback>>,
+    { data: BodyType<FeedbackRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitFeedback(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitFeedbackMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitFeedback>>
+>;
+export type SubmitFeedbackMutationBody = BodyType<FeedbackRequest>;
+export type SubmitFeedbackMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Submit feedback on a check result
+ */
+export const useSubmitFeedback = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitFeedback>>,
+    TError,
+    { data: BodyType<FeedbackRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitFeedback>>,
+  TError,
+  { data: BodyType<FeedbackRequest> },
+  TContext
+> => {
+  return useMutation(getSubmitFeedbackMutationOptions(options));
+};
+
+/**
+ * Returns aggregated feedback ratings for a specific check result
+ * @summary Get feedback summary for a check
+ */
+export const getGetFeedbackSummaryUrl = (checkId: string) => {
+  return `/api/feedback/${checkId}/summary`;
+};
+
+export const getFeedbackSummary = async (
+  checkId: string,
+  options?: RequestInit,
+): Promise<FeedbackSummary> => {
+  return customFetch<FeedbackSummary>(getGetFeedbackSummaryUrl(checkId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFeedbackSummaryQueryKey = (checkId: string) => {
+  return [`/api/feedback/${checkId}/summary`] as const;
+};
+
+export const getGetFeedbackSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFeedbackSummary>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  checkId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFeedbackSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetFeedbackSummaryQueryKey(checkId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFeedbackSummary>>
+  > = ({ signal }) =>
+    getFeedbackSummary(checkId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!checkId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFeedbackSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFeedbackSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFeedbackSummary>>
+>;
+export type GetFeedbackSummaryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get feedback summary for a check
+ */
+
+export function useGetFeedbackSummary<
+  TData = Awaited<ReturnType<typeof getFeedbackSummary>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  checkId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getFeedbackSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFeedbackSummaryQueryOptions(checkId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Returns rich platform-wide stats including daily trend, accuracy rate, and community metrics
+ * @summary Get public platform statistics
+ */
+export const getGetPublicStatsUrl = () => {
+  return `/api/stats/public`;
+};
+
+export const getPublicStats = async (
+  options?: RequestInit,
+): Promise<PublicStats> => {
+  return customFetch<PublicStats>(getGetPublicStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPublicStatsQueryKey = () => {
+  return [`/api/stats/public`] as const;
+};
+
+export const getGetPublicStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPublicStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicStats>>> = ({
+    signal,
+  }) => getPublicStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicStats>>
+>;
+export type GetPublicStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get public platform statistics
+ */
+
+export function useGetPublicStats<
+  TData = Awaited<ReturnType<typeof getPublicStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicStatsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { checksTable, reportsTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc, ilike, and } from "drizzle-orm";
 import { checkUrl } from "../lib/pipeline/url";
 import { checkPhone } from "../lib/pipeline/phone";
 import { checkMessage } from "../lib/pipeline/message";
@@ -149,6 +149,90 @@ router.get("/checks/recent", async (_req, res) => {
     byType,
     byVerdict,
   });
+});
+
+router.get("/check/:id", async (req, res) => {
+  const { id } = req.params;
+  const rows = await db.select().from(checksTable).where(eq(checksTable.id, id)).limit(1);
+  if (!rows[0]) {
+    res.status(404).json({ error: "NOT_FOUND", message: "Проверката не е намерена" });
+    return;
+  }
+  res.json(rows[0]);
+});
+
+router.get("/checks/search", async (req, res) => {
+  const { q, type, limit: rawLimit } = req.query as { q?: string; type?: string; limit?: string };
+
+  if (!q || q.trim().length < 2) {
+    res.status(400).json({ error: "INVALID_INPUT", message: "Параметърът q трябва да е поне 2 символа" });
+    return;
+  }
+
+  const validTypes = ["url", "phone", "message", "news"];
+  if (type && !validTypes.includes(type)) {
+    res.status(400).json({ error: "INVALID_TYPE", message: `Типът трябва да е един от: ${validTypes.join(", ")}` });
+    return;
+  }
+
+  const pageLimit = Math.min(Number(rawLimit ?? 10), 50);
+  const pattern = `%${q.trim()}%`;
+
+  const conditions = type
+    ? and(ilike(checksTable.input, pattern), eq(checksTable.type, type))
+    : ilike(checksTable.input, pattern);
+
+  const rows = await db
+    .select({
+      id: checksTable.id,
+      type: checksTable.type,
+      input: checksTable.input,
+      verdict: checksTable.verdict,
+      verdictLabel: checksTable.verdictLabel,
+      riskScore: checksTable.riskScore,
+      checkedAt: checksTable.checkedAt,
+    })
+    .from(checksTable)
+    .where(conditions)
+    .orderBy(desc(checksTable.checkedAt))
+    .limit(pageLimit);
+
+  res.json({ results: rows, count: rows.length });
+});
+
+router.get("/checks/top-threats", async (req, res) => {
+  const { limit: rawLimit, type } = req.query as { limit?: string; type?: string };
+  const pageLimit = Math.min(Number(rawLimit ?? 20), 100);
+
+  const validTypes = ["url", "phone", "message", "news"];
+  if (type && !validTypes.includes(type)) {
+    res.status(400).json({ error: "INVALID_TYPE", message: `Типът трябва да е един от: ${validTypes.join(", ")}` });
+    return;
+  }
+
+  const verdictFilter = sql`${checksTable.verdict} IN ('scam', 'suspicious', 'misleading')`;
+  const conditions = type
+    ? and(verdictFilter, eq(checksTable.type, type))
+    : verdictFilter;
+
+  const rows = await db
+    .select({
+      id: checksTable.id,
+      type: checksTable.type,
+      input: checksTable.input,
+      verdict: checksTable.verdict,
+      verdictLabel: checksTable.verdictLabel,
+      riskScore: checksTable.riskScore,
+      confidence: checksTable.confidence,
+      summary: checksTable.summary,
+      checkedAt: checksTable.checkedAt,
+    })
+    .from(checksTable)
+    .where(conditions)
+    .orderBy(desc(checksTable.riskScore))
+    .limit(pageLimit);
+
+  res.json({ threats: rows, count: rows.length });
 });
 
 export default router;

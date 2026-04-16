@@ -226,6 +226,230 @@ export const GetAdminStatsResponse = zod.object({
 });
 
 /**
+ * Retrieve a specific past check result by its UUID
+ * @summary Get a check result by ID
+ */
+export const GetCheckByIdParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const getCheckByIdResponseRiskScoreMin = 0;
+export const getCheckByIdResponseRiskScoreMax = 100;
+
+export const getCheckByIdResponseConfidenceMin = 0;
+export const getCheckByIdResponseConfidenceMax = 100;
+
+export const GetCheckByIdResponse = zod.object({
+  id: zod.string(),
+  type: zod.enum(["url", "phone", "message", "news"]),
+  input: zod.string(),
+  verdict: zod.enum([
+    "safe",
+    "insufficient",
+    "suspicious",
+    "misleading",
+    "scam",
+  ]),
+  verdictLabel: zod.string().describe("Bulgarian verdict label"),
+  riskScore: zod
+    .number()
+    .min(getCheckByIdResponseRiskScoreMin)
+    .max(getCheckByIdResponseRiskScoreMax)
+    .describe("0=safe, 100=definite scam"),
+  confidence: zod
+    .number()
+    .min(getCheckByIdResponseConfidenceMin)
+    .max(getCheckByIdResponseConfidenceMax)
+    .describe("Confidence in the assessment"),
+  summary: zod.string().describe("Bulgarian summary of the assessment"),
+  signals: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string().describe("Bulgarian label for the signal"),
+      description: zod
+        .string()
+        .describe("Bulgarian description of what was found"),
+      weight: zod.number().describe("Contribution to risk score (-1 to 1)"),
+      isRisk: zod.boolean().describe("True if this signal increases risk"),
+    }),
+  ),
+  evidence: zod.array(
+    zod.object({
+      source: zod.string().describe("Name of the data source"),
+      finding: zod.string().describe("Bulgarian description of what was found"),
+      url: zod.string().nullish().describe("Optional link to source"),
+    }),
+  ),
+  nextSteps: zod.array(
+    zod.object({
+      action: zod.string().describe("Bulgarian action label"),
+      description: zod.string().describe("Bulgarian description"),
+      priority: zod.enum(["high", "medium", "low"]),
+    }),
+  ),
+  checkedAt: zod.coerce.date(),
+});
+
+/**
+ * Look up previously checked inputs by partial match
+ * @summary Search prior check results
+ */
+export const searchChecksQueryQMin = 2;
+
+export const searchChecksQueryLimitDefault = 10;
+export const searchChecksQueryLimitMax = 50;
+
+export const SearchChecksQueryParams = zod.object({
+  q: zod.coerce
+    .string()
+    .min(searchChecksQueryQMin)
+    .describe("Search query (partial match on input)"),
+  type: zod
+    .enum(["url", "phone", "message", "news"])
+    .optional()
+    .describe("Filter by check type"),
+  limit: zod.coerce
+    .number()
+    .max(searchChecksQueryLimitMax)
+    .default(searchChecksQueryLimitDefault),
+});
+
+export const SearchChecksResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      id: zod.string(),
+      type: zod.enum(["url", "phone", "message", "news"]),
+      input: zod.string(),
+      verdict: zod.enum([
+        "safe",
+        "insufficient",
+        "suspicious",
+        "misleading",
+        "scam",
+      ]),
+      verdictLabel: zod.string(),
+      riskScore: zod.number(),
+      checkedAt: zod.coerce.date(),
+    }),
+  ),
+  count: zod.number(),
+});
+
+/**
+ * Returns the highest-risk scam and suspicious entries
+ * @summary Get top confirmed threats
+ */
+export const getTopThreatsQueryLimitDefault = 20;
+export const getTopThreatsQueryLimitMax = 100;
+
+export const GetTopThreatsQueryParams = zod.object({
+  limit: zod.coerce
+    .number()
+    .max(getTopThreatsQueryLimitMax)
+    .default(getTopThreatsQueryLimitDefault),
+  type: zod.enum(["url", "phone", "message", "news"]).optional(),
+});
+
+export const GetTopThreatsResponse = zod.object({
+  threats: zod.array(
+    zod.object({
+      id: zod.string(),
+      type: zod.enum(["url", "phone", "message", "news"]),
+      input: zod.string(),
+      verdict: zod.enum([
+        "safe",
+        "insufficient",
+        "suspicious",
+        "misleading",
+        "scam",
+      ]),
+      verdictLabel: zod.string(),
+      riskScore: zod.number(),
+      confidence: zod.number(),
+      summary: zod.string(),
+      checkedAt: zod.coerce.date(),
+    }),
+  ),
+  count: zod.number(),
+});
+
+/**
+ * Rate a check result as helpful, misleading, or inaccurate
+ * @summary Submit feedback on a check result
+ */
+export const SubmitFeedbackBody = zod.object({
+  checkId: zod.string(),
+  rating: zod.enum(["helpful", "misleading", "inaccurate"]),
+  comment: zod.string().nullish(),
+});
+
+/**
+ * Returns aggregated feedback ratings for a specific check result
+ * @summary Get feedback summary for a check
+ */
+export const GetFeedbackSummaryParams = zod.object({
+  checkId: zod.coerce.string(),
+});
+
+export const GetFeedbackSummaryResponse = zod.object({
+  checkId: zod.string(),
+  total: zod.number(),
+  ratings: zod.object({
+    helpful: zod.number(),
+    misleading: zod.number(),
+    inaccurate: zod.number(),
+  }),
+});
+
+/**
+ * Returns rich platform-wide stats including daily trend, accuracy rate, and community metrics
+ * @summary Get public platform statistics
+ */
+export const GetPublicStatsResponse = zod.object({
+  totalChecks: zod.number(),
+  todayChecks: zod.number(),
+  scamsDetected: zod.number(),
+  suspiciousDetected: zod.number(),
+  safeCount: zod.number(),
+  riskRate: zod
+    .number()
+    .describe("Percentage of checks that were scam or suspicious"),
+  byType: zod.object({
+    url: zod.number(),
+    phone: zod.number(),
+    message: zod.number(),
+    news: zod.number(),
+  }),
+  byVerdict: zod.object({
+    safe: zod.number(),
+    insufficient: zod.number(),
+    suspicious: zod.number(),
+    misleading: zod.number(),
+    scam: zod.number(),
+  }),
+  community: zod.object({
+    totalReports: zod.number(),
+    reviewedReports: zod.number(),
+  }),
+  feedback: zod.object({
+    total: zod.number(),
+    helpful: zod.number(),
+    accuracyRate: zod
+      .number()
+      .nullable()
+      .describe(
+        "Percentage of feedback marked helpful, null if no feedback yet",
+      ),
+  }),
+  dailyTrend: zod.array(
+    zod.object({
+      date: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});
+
+/**
  * @summary Get the currently authenticated user
  */
 export const GetCurrentAuthUserHeader = zod.object({
@@ -243,7 +467,6 @@ export const GetCurrentAuthUserResponse = zod.object({
       firstName: zod.string().nullable(),
       lastName: zod.string().nullable(),
       profileImageUrl: zod.string().nullable(),
-      isAdmin: zod.boolean(),
     }),
     zod.null(),
   ]),
