@@ -1,0 +1,158 @@
+Replit:
+
+:::writing{variant=“standard” id=“58422”}
+Work inside this repo:
+
+https://github.com/georgikostadinchev/Website_TrueNewsScanner
+
+Upgrade the scoring reliability of the API without breaking the frontend response shape.
+
+Current situation:
+
+* artifacts/api-server/src/routes/check.ts receives { type, input }, selects a pipeline, stores the result, and returns it.  
+* Community reports are stored separately and currently do not affect the check result.
+* The app already returns:
+    * verdict
+    * verdictLabel
+    * riskScore
+    * confidence
+    * summary
+    * signals
+    * evidence
+    * nextSteps
+
+Your task:
+Implement a production-minded MVP scoring improvement with minimal invasive refactoring.
+
+Requirements:
+
+1. Keep the existing API response shape unchanged
+2. Keep TypeScript
+3. Do not rewrite the frontend
+4. Do not remove AI support
+5. Make the final score deterministic in backend
+6. Keep fallback behavior if AI fails
+
+Implement these improvements:
+
+1. Central scoring engine
+    Create a reusable scoring module, for example:
+
+* artifacts/api-server/src/lib/scoring/engine.ts
+* artifacts/api-server/src/lib/scoring/types.ts
+
+The scoring engine should combine:
+
+* heuristic signals
+* AI signals
+* community report signals
+* exact-match memory signals
+* trusted allowlist signals
+
+It must output:
+
+* riskScore
+* confidence
+* verdict
+* verdictLabel
+
+Use these thresholds:
+
+* 0–19 safe
+* 20–39 insufficient
+* 40–59 suspicious
+* 60–79 misleading
+* 80–100 scam
+
+2. AI should be advisory, not final authority
+    Refactor so AI no longer fully decides the final result.
+    Minimal acceptable version:
+
+* keep the current AI call
+* treat AI riskScore as one weighted signal
+* merge it with deterministic signals
+* let the new scoring engine compute the final score
+
+3. Connect community reports to /check
+    Use reportsTable for matching the checked input:
+
+* exact match first
+* only reviewed reports should strongly affect risk
+* pending reports should have little or no influence
+* dismissed reports should reduce confidence or neutralize report impact
+
+4. Add exact-match memory
+    For url and phone:
+
+* normalize input consistently
+* reviewed report matches should strongly influence risk
+* previous check matches may add a weak consistency signal only
+* do not treat previous checks as ground truth
+
+Normalization:
+
+* phone: remove spaces, dashes, parentheses
+* url: trim, lowercase host, safely remove trailing slash for comparison
+
+5. Add trusted allowlist
+    Create a small trusted domain allowlist, such as:
+
+* gov.bg
+* bnb.bg
+* nap.bg
+* nsi.bg
+* mvr.bg
+* lex.bg
+* bta.bg
+* bnr.bg
+* bntnews.bg
+
+Allowlist behavior:
+
+* reduce risk
+* slightly improve confidence
+* never force guaranteed safety by itself
+
+6. Dynamic confidence
+    Replace static confidence with calculated confidence based on:
+
+* number of independent signals
+* agreement between AI and heuristics
+* presence of reviewed reports
+* exact-match strength
+* allowlist presence
+* conflicting evidence
+
+7. Keep current summaries usable
+    Reuse current summary/next step logic where possible.
+    Do not overcomplicate wording generation.
+
+Files likely to change:
+
+* artifacts/api-server/src/routes/check.ts
+* current pipeline files
+* new scoring helper files
+
+What not to do:
+
+* do not redesign frontend
+* do not add paid services
+* do not break the API schema
+* do not do a giant rewrite
+
+Deliverables:
+
+1. Implement the code
+2. Show changed files
+3. Explain the new scoring flow
+4. Give 6 test examples:
+    * trusted official URL
+    * suspicious fake prize URL
+    * phone with reviewed scam reports
+    * normal Bulgarian mobile number with no signals
+    * phishing SMS
+    * fake-news style sensational text
+5. Prefer no DB schema changes unless truly necessary
+
+Focus on clean, minimal, production-minded improvements.
+:::

@@ -1,4 +1,4 @@
-import { type PipelineResult, scoreToVerdict, verdictToLabel } from "./types";
+import { type Signal, type RawPipelineResult, scoreToVerdict } from "./types";
 import { aiCheck } from "./ai";
 
 const SCAM_PATTERNS = [
@@ -11,12 +11,31 @@ const SCAM_PATTERNS = [
   { pattern: /срочно|незабавно|веднага|последна.*возможност/i, label: "Изкуствена спешност", desc: "Използват се думи, създаващи изкуствен натиск", weight: 0.3 },
 ];
 
-function buildSummary(verdict: string, score: number): string {
-  if (verdict === "safe") return `Анализираното съобщение не съдържа познати измамни фрази или манипулативни модели.`;
-  if (verdict === "insufficient") return `Не можем да дадем категорична оценка за това съобщение. Препоръчваме внимание.`;
-  if (verdict === "suspicious") return `Съобщението съдържа фрази, типични за измамни схеми. Рискова оценка: ${score}/100.`;
-  if (verdict === "misleading") return `Съобщението показва множество признаци за подвеждащо съдържание. Рискова оценка: ${score}/100.`;
-  return `Съобщението съдържа силни индикатори за измамна схема. Рискова оценка: ${score}/100. Изтрийте го незабавно.`;
+function runMessageHeuristic(input: string): { score: number; signals: Signal[] } {
+  const signals: Signal[] = [];
+  let score = 10;
+
+  for (const p of SCAM_PATTERNS) {
+    if (p.pattern.test(input)) {
+      score += p.weight * 100;
+      signals.push({ id: `risk-${signals.length}`, label: p.label, description: p.desc, weight: p.weight, isRisk: true });
+    }
+  }
+
+  if (signals.length === 0) {
+    signals.push({ id: "no-signals", label: "Неизвестен модел", description: "Не са открити конкретни измамни шаблони", weight: 0, isRisk: false });
+    score = 30;
+  }
+
+  return { score: Math.max(0, Math.min(100, score)), signals };
+}
+
+function buildSummary(verdict: string): string {
+  if (verdict === "safe") return "Анализираното съобщение не съдържа познати измамни фрази или манипулативни модели.";
+  if (verdict === "insufficient") return "Не можем да дадем категорична оценка за това съобщение. Препоръчваме внимание.";
+  if (verdict === "suspicious") return "Съобщението съдържа фрази, типични за измамни схеми.";
+  if (verdict === "misleading") return "Съобщението показва множество признаци за подвеждащо съдържание.";
+  return "Съобщението съдържа силни индикатори за измамна схема. Изтрийте го незабавно.";
 }
 
 function buildNextSteps(verdict: string): Array<{ action: string; description: string; priority: "high" | "medium" | "low" }> {
@@ -37,37 +56,40 @@ function buildNextSteps(verdict: string): Array<{ action: string; description: s
   ];
 }
 
-export async function checkMessage(input: string): Promise<PipelineResult> {
+export async function checkMessage(input: string): Promise<RawPipelineResult> {
+  const { score: hScore, signals: hSignals } = runMessageHeuristic(input);
+  const hVerdict = scoreToVerdict(hScore);
+
+  let aiScore: number | undefined;
+  let aiSignals: Signal[] | undefined;
+  let aiSummary: string | undefined;
+  let aiEvidence: Array<{ source: string; finding: string; url: string | null }> | undefined;
+  let aiNextSteps: Array<{ action: string; description: string; priority: "high" | "medium" | "low" }> | undefined;
+  let aiAvailable = false;
+
   try {
-    return await aiCheck("message", input);
+    const ai = await aiCheck("message", input);
+    aiScore = ai.riskScore;
+    aiSignals = ai.signals;
+    aiSummary = ai.summary;
+    aiEvidence = ai.evidence;
+    aiNextSteps = ai.nextSteps;
+    aiAvailable = true;
   } catch {
-    const signals = [];
-    let score = 10;
-
-    for (const p of SCAM_PATTERNS) {
-      if (p.pattern.test(input)) {
-        score += p.weight * 100;
-        signals.push({ id: `risk-${signals.length}`, label: p.label, description: p.desc, weight: p.weight, isRisk: true });
-      }
-    }
-
-    if (signals.length === 0) {
-      signals.push({ id: "no-signals", label: "Неизвестен модел", description: "Не са открити конкретни измамни шаблони", weight: 0, isRisk: false });
-      score = 30;
-    }
-
-    score = Math.max(0, Math.min(100, score));
-    const verdict = scoreToVerdict(score);
-
-    return {
-      verdict,
-      verdictLabel: verdictToLabel(verdict),
-      riskScore: score,
-      confidence: 50,
-      summary: buildSummary(verdict, score),
-      signals,
-      evidence: [{ source: "Текстов анализ на шаблони", finding: `Анализирани са ${signals.length} характеристики`, url: null }],
-      nextSteps: buildNextSteps(verdict),
-    };
+    // AI unavailable — fall back to heuristic-only scoring
   }
+
+  return {
+    heuristicScore: hScore,
+    heuristicSignals: hSignals,
+    aiScore,
+    aiSignals,
+    aiAvailable,
+    aiSummary,
+    aiEvidence,
+    aiNextSteps,
+    heuristicSummary: buildSummary(hVerdict),
+    heuristicEvidence: [{ source: "Текстов анализ на шаблони", finding: `Анализирани са ${hSignals.length} характеристики`, url: null }],
+    heuristicNextSteps: buildNextSteps(hVerdict),
+  };
 }

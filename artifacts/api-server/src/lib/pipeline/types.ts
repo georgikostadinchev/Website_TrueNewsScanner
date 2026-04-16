@@ -50,3 +50,17 @@ export function verdictToLabel(verdict: Verdict): string {
   };
   return labels[verdict];
 }
+
+export interface RawPipelineResult {
+  heuristicScore: number;
+  heuristicSignals: Signal[];
+  aiScore?: number;
+  aiSignals?: Signal[];
+  aiAvailable: boolean;
+  aiSummary?: string;
+  aiEvidence?: Evidence[];
+  aiNextSteps?: NextStep[];
+  heuristicSummary: string;
+  heuristicEvidence: Evidence[];
+  heuristicNextSteps: NextStep[];
+}
