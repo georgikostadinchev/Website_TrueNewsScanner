@@ -1,4 +1,4 @@
-import { type Signal, type RawPipelineResult, scoreToVerdict } from "./types";
+import { type Signal, type Evidence, type RawPipelineResult, scoreToVerdict } from "./types";
 import { aiCheck } from "./ai";
 
 function extractDomain(url: string): string {
@@ -84,7 +84,7 @@ export async function checkUrl(input: string): Promise<RawPipelineResult> {
   let aiScore: number | undefined;
   let aiSignals: Signal[] | undefined;
   let aiSummary: string | undefined;
-  let aiEvidence: Array<{ source: string; finding: string; url: string | null }> | undefined;
+  let aiEvidence: Evidence[] | undefined;
   let aiNextSteps: Array<{ action: string; description: string; priority: "high" | "medium" | "low" }> | undefined;
   let aiAvailable = false;
 
