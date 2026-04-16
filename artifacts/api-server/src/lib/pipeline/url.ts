@@ -67,6 +67,12 @@ const TRUSTED_INSTITUTION_DOMAINS = new Set([
   "mfa.bg", "mon.bg", "mh.government.bg",
 ]);
 
+// Exact match only — used for the safe signal score
+function isExactTrustedInstitutionDomain(hostname: string): boolean {
+  return TRUSTED_INSTITUTION_DOMAINS.has(normalizeHostname(hostname));
+}
+
+// Broader check (includes official subdomains) — used to suppress related risk signals
 function isTrustedInstitutionDomain(hostname: string): boolean {
   const norm = normalizeHostname(hostname);
   return (
@@ -80,6 +86,12 @@ const TRUSTED_MEDIA_DOMAINS = new Set([
   "dnes.bg", "actualno.com", "capital.bg",
 ]);
 
+// Exact match only — used for the safe signal score
+function isExactTrustedMediaDomain(hostname: string): boolean {
+  return TRUSTED_MEDIA_DOMAINS.has(normalizeHostname(hostname));
+}
+
+// Broader check — used to suppress related risk signals
 function isTrustedMediaDomain(hostname: string): boolean {
   const norm = normalizeHostname(hostname);
   return (
@@ -143,29 +155,33 @@ function runUrlHeuristic(input: string): { score: number; signals: Signal[] } {
 
   const { hostname, pathname, port, searchParams } = parsed;
   const norm = normalizeHostname(hostname);
+  // Exact-match checks used for the safe signals (score reduction)
+  const isExactInstitution = isExactTrustedInstitutionDomain(hostname);
+  const isExactMedia = isExactTrustedMediaDomain(hostname);
+  // Broader checks used to suppress risk signals (e.g. subdomains of official domains)
   const isTrustedInstitution = isTrustedInstitutionDomain(hostname);
   const isTrustedMedia = isTrustedMediaDomain(hostname);
   const isTrusted = isTrustedInstitution || isTrustedMedia;
   const isTrustedBank = TRUSTED_BANK_DOMAINS.has(norm) || [...TRUSTED_BANK_DOMAINS].some((d) => norm.endsWith("." + d));
 
-  // --- Safe: trusted institution ---
-  if (isTrustedInstitution) {
+  // --- Safe: trusted institution (EXACT match only) ---
+  if (isExactInstitution) {
     signals.push({
       id: "trusted-institution",
       label: "Официален домейн на българска институция",
-      description: "Домейнът принадлежи на официална българска институция или държавен орган",
+      description: "Домейнът е в точния списък на официални български институции и държавни органи",
       weight: -0.4,
       isRisk: false,
     });
     score -= 40;
   }
 
-  // --- Safe: trusted media ---
-  if (isTrustedMedia) {
+  // --- Safe: trusted media (EXACT match only) ---
+  if (isExactMedia) {
     signals.push({
       id: "trusted-media",
       label: "Утвърдена българска медия",
-      description: "Домейнът принадлежи на утвърдена българска медия с доказана репутация",
+      description: "Домейнът е в точния списък на утвърдени български медии с доказана репутация",
       weight: -0.25,
       isRisk: false,
     });

@@ -14,7 +14,7 @@ function containsIban(text: string): boolean {
 }
 
 function containsCardLikeNumber(text: string): boolean {
-  return /\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b/.test(text);
+  return /(?<!\d)\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}(?!\d)/.test(text);
 }
 
 function containsEmbeddedUrl(text: string): boolean {
@@ -43,8 +43,13 @@ function isTrackingOnlyMessage(text: string, hasUrl: boolean, hasUrgency: boolea
     /\b[A-Z]{2}\d{9}[A-Z]{2}\b/.test(text);
 }
 
+function hasFormalSenderSignature(text: string): boolean {
+  const tail = text.slice(-200);
+  return /\b(АД|ООД|ЕООД|ЕАД|Банка|Bank|Ltd|Corp|Inc|S\.A\.|Group|Застрахов|Осигур|Здравн|Министерство|Агенция|Дирекция|Общ[а-я]+|Управ)\b/i.test(tail);
+}
+
 // ---------------------------------------------------------------------------
-// Pattern groups (existing + new)
+// Pattern groups (existing)
 // ---------------------------------------------------------------------------
 
 const BG_SCAM_PHRASES = [
@@ -59,6 +64,37 @@ const BG_SCAM_PHRASES = [
 
 const ENGLISH_PHISHING_PHRASES = /click here|verify your account|your account (has been )?suspended|unauthorized access|confirm your (identity|details)|unusual activity/i;
 const URGENCY_PATTERN = /срочно|незабавно|веднага|последна.*возможност|urgent|immediately/i;
+
+// ---------------------------------------------------------------------------
+// Credential/payment cluster cap
+// Each triggered signal adds its score; the cluster total is capped at 150pts
+// ---------------------------------------------------------------------------
+
+interface CredentialSignalCandidate {
+  id: string;
+  label: string;
+  description: string;
+  weight: number;
+  pts: number;
+  triggered: boolean;
+}
+
+function applyCredentialCluster(
+  candidates: CredentialSignalCandidate[],
+  maxPts: number,
+): { signals: Signal[]; totalPts: number } {
+  const fired = candidates.filter((c) => c.triggered);
+  const out: Signal[] = [];
+  let used = 0;
+  for (const c of fired) {
+    const remaining = maxPts - used;
+    if (remaining <= 0) break;
+    const effective = Math.min(c.pts, remaining);
+    out.push({ id: c.id, label: c.label, description: c.description, weight: c.weight, isRisk: true });
+    used += effective;
+  }
+  return { signals: out, totalPts: used };
+}
 
 // ---------------------------------------------------------------------------
 // Core heuristic runner
@@ -90,86 +126,69 @@ function runMessageHeuristic(input: string): { score: number; signals: Signal[] 
     }
   }
 
-  // --- IBAN or card-like number ---
-  if (containsIban(msg)) {
-    signals.push({
-      id: "iban-present",
-      label: "IBAN номер в съобщението",
-      description: "Съобщението съдържа IBAN номер — рядко присъства в легитимни SMS/съобщения",
-      weight: 0.7,
-      isRisk: true,
-    });
-    score += 70;
-  } else if (containsCardLikeNumber(msg)) {
-    signals.push({
-      id: "card-number",
-      label: "Номер, подобен на банкова карта",
-      description: "Съобщението съдържа 16-цифрена поредица, наподобяваща номер на платежна карта",
-      weight: 0.7,
-      isRisk: true,
-    });
-    score += 70;
-  }
-
-  // --- Personal ID request ---
-  if (/ЕГН|лична карта|личен номер/i.test(msg)) {
-    signals.push({
-      id: "personal-id-request",
-      label: "Искане на лични документи",
-      description: "Съобщението иска ЕГН, номер на лична карта или друг личен идентификатор",
-      weight: 0.65,
-      isRisk: true,
-    });
-    score += 65;
-  }
-
-  // --- CVV / PIN request (credential cluster — cap together with personal-id) ---
-  if (/CVV|CVC|ПИН|пин код/i.test(msg) && !signals.find((s) => s.id === "personal-id-request")) {
-    signals.push({
+  // --- Credential / payment cluster (capped at 150 pts combined) ---
+  const credentialCandidates: CredentialSignalCandidate[] = [
+    {
       id: "cvv-pin-request",
       label: "Искане на CVV / ПИН код",
       description: "Съобщението иска CVV, CVC или ПИН код — легитимните организации никога не правят това",
       weight: 0.8,
-      isRisk: true,
-    });
-    score += 80;
-  }
-
-  // --- Password request ---
-  if (/парола|password\b|pwd\b/i.test(msg)) {
-    signals.push({
+      pts: 80,
+      triggered: /CVV|CVC|ПИН|пин код/i.test(msg),
+    },
+    {
       id: "password-request",
       label: "Искане на парола",
       description: "Съобщението иска парола — никоя легитимна организация не прави това",
       weight: 0.75,
-      isRisk: true,
-    });
-    score += 75;
-  }
-
-  // --- Cryptocurrency request ---
-  if (/Bitcoin|BTC|Ethereum|ETH|крипто|портфейл|crypto\s*wallet|wallet\s*address/i.test(msg)) {
-    signals.push({
+      pts: 75,
+      triggered: /парола|password\b|pwd\b/i.test(msg),
+    },
+    {
+      id: "personal-id-request",
+      label: "Искане на лични документи",
+      description: "Съобщението иска ЕГН, номер на лична карта или друг личен идентификатор",
+      weight: 0.65,
+      pts: 65,
+      triggered: /ЕГН|лична карта|личен номер/i.test(msg),
+    },
+    {
+      id: "iban-present",
+      label: "IBAN номер в съобщението",
+      description: "Съобщението съдържа IBAN номер — рядко присъства в легитимни SMS/съобщения",
+      weight: 0.7,
+      pts: 70,
+      triggered: containsIban(msg),
+    },
+    {
+      id: "card-number",
+      label: "Номер, подобен на банкова карта",
+      description: "Съобщението съдържа 16-цифрена поредица, наподобяваща номер на платежна карта",
+      weight: 0.7,
+      pts: 70,
+      triggered: !containsIban(msg) && containsCardLikeNumber(msg),
+    },
+    {
       id: "crypto-request",
       label: "Искане за криптовалута",
       description: "Съобщението споменава криптовалута или крипто портфейл — честа тактика при измами",
       weight: 0.7,
-      isRisk: true,
-    });
-    score += 70;
-  }
-
-  // --- Gift card / voucher demand ---
-  if (/gift\s*card|ваучер|код за|iTunes|Amazon\s*voucher|Google\s*Play/i.test(msg)) {
-    signals.push({
+      pts: 70,
+      triggered: /Bitcoin|BTC|Ethereum|ETH|крипто|портфейл|crypto\s*wallet|wallet\s*address/i.test(msg),
+    },
+    {
       id: "gift-card",
       label: "Искане на ваучер / gift card",
       description: "Съобщението иска покупка или изпращане на ваучер или gift card — класическа измамна тактика",
       weight: 0.65,
-      isRisk: true,
-    });
-    score += 65;
-  }
+      pts: 65,
+      triggered: /gift\s*card|ваучер|код за|iTunes|Amazon\s*voucher|Google\s*Play/i.test(msg),
+    },
+  ];
+
+  const { signals: credSignals, totalPts: credPts } = applyCredentialCluster(credentialCandidates, 150);
+  for (const s of credSignals) signals.push(s);
+  score += credPts;
 
   // --- English phishing phrases ---
   if (ENGLISH_PHISHING_PHRASES.test(msg)) {
@@ -212,7 +231,6 @@ function runMessageHeuristic(input: string): { score: number; signals: Signal[] 
   // --- Embedded URL ---
   if (hasUrl) {
     if (msg.length < 30 && urlCount === 1) {
-      // Very short message with a single link
       signals.push({
         id: "short-link-only",
         label: "Много кратко съобщение само с линк",
@@ -233,12 +251,13 @@ function runMessageHeuristic(input: string): { score: number; signals: Signal[] 
     }
   }
 
-  // --- Safe: formal greeting ---
-  if (/^(Уважаем|Dear\b)/i.test(msg)) {
+  // --- Safe: formal greeting + named sender signature ---
+  const hasFormalGreeting = /^(Уважаем|Dear\b)/i.test(msg);
+  if (hasFormalGreeting && hasFormalSenderSignature(msg)) {
     signals.push({
       id: "formal-greeting",
-      label: "Официално обръщение",
-      description: "Съобщението започва с официално обръщение, характерно за легитимна кореспонденция",
+      label: "Официално обръщение с подателска подпис",
+      description: "Съобщението започва с официално обръщение и завършва с идентифициран подател — характерно за легитимна кореспонденция",
       weight: -0.2,
       isRisk: false,
     });

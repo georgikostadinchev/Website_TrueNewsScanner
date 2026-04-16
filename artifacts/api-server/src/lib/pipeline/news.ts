@@ -36,8 +36,8 @@ function hasEconomicClickbaitMarkers(text: string): boolean {
 function hasPunctuationDeficit(text: string): boolean {
   if (text.length < 60) return false;
   const hasPunctuation = /[.!?]/.test(text);
-  const allCaps = text.replace(/[^a-zA-Zа-яА-Я]/gu, "").length > 0 &&
-    text.replace(/[^a-zA-Zа-яА-Я]/gu, "") === text.replace(/[^A-ZА-Я]/gu, "");
+  const letters = text.replace(/[^a-zA-Zа-яА-Я]/gu, "");
+  const allCaps = letters.length > 0 && letters === letters.toUpperCase();
   return !hasPunctuation || allCaps;
 }
 
@@ -46,7 +46,7 @@ function matchesClickbaitEnding(text: string): boolean {
 }
 
 function hasCivilUnrestMarkers(text: string): boolean {
-  return /свалете правителството|на улицата|народен бунт|въстание срещу|масови протести срещу|революция срещу/i.test(text);
+  return /свалете правителството|народен бунт|въстание срещу|масови протести срещу|революция срещу/i.test(text);
 }
 
 function hasProKremlinNarratives(text: string): boolean {
@@ -58,22 +58,31 @@ function hasViralCallToShare(text: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Sensationalism cluster cap
+// Sensationalism cluster cap — returns signal entries with their EFFECTIVE pts
 // ---------------------------------------------------------------------------
+
+interface SensationalEntry {
+  id: string;
+  label: string;
+  desc: string;
+  weight: number;
+  effectivePts: number;
+}
 
 function cappedSensationalismScore(
   triggers: Array<{ triggered: boolean; id: string; label: string; desc: string; weight: number }>,
-  maxContribution: number,
-): Array<{ id: string; label: string; desc: string; weight: number }> {
+  maxContributionPts: number,
+): SensationalEntry[] {
   const fired = triggers.filter((t) => t.triggered);
   if (fired.length === 0) return [];
-  let total = 0;
-  const result: Array<{ id: string; label: string; desc: string; weight: number }> = [];
+  let usedPts = 0;
+  const result: SensationalEntry[] = [];
   for (const t of fired) {
-    const add = Math.min(t.weight, (maxContribution - total) / 100);
-    if (add <= 0) break;
-    result.push({ id: t.id, label: t.label, desc: t.desc, weight: t.weight });
-    total += t.weight * 100;
+    const remaining = maxContributionPts - usedPts;
+    if (remaining <= 0) break;
+    const effectivePts = Math.min(t.weight * 100, remaining);
+    result.push({ id: t.id, label: t.label, desc: t.desc, weight: t.weight, effectivePts });
+    usedPts += effectivePts;
   }
   return result;
 }
@@ -91,6 +100,7 @@ function runNewsHeuristic(input: string): { score: number; signals: Signal[] } {
   // --- Pre-compute features ---
   const hasAttr = hasAttribution(text);
   const hasOfficialAttr = hasOfficialAttribution(text);
+  const isBalanced = hasBalancedLanguage(text);
   const isShortText = text.length < 80;
 
   // --- Existing misinformation patterns ---
@@ -150,22 +160,47 @@ function runNewsHeuristic(input: string): { score: number; signals: Signal[] } {
     score += 35;
   }
 
-  // --- Sensationalism cluster (capped at 60 pts combined) ---
+  // --- Sensationalism cluster — scores are CAPPED at 60pts combined ---
   const sensationalTriggers = [
-    { triggered: hasSensationalLanguage(text), id: "sensational-lang", label: "Емоционални суперлативи", desc: "Текстът използва шокиращ или сензационен език без конкретни факти", weight: 0.3 },
-    { triggered: matchesClickbaitEnding(text), id: "clickbait-ending", label: "Клик-бейт формула", desc: "Текстът завършва с типична клик-бейт фраза, целяща да провокира кликване", weight: 0.4 },
-    { triggered: /само тук|преди официалното|ексклузивно|преди да изтрие/i.test(text), id: "false-urgency", label: "Изкуствена спешност / ексклузивност", desc: "Твърди се, че информацията е достъпна единствено тук или ще бъде изтрита скоро", weight: 0.45 },
-    { triggered: hasPunctuationDeficit(text), id: "punctuation-deficit", label: "Дефицит на пунктуация / главни букви", desc: "Текстът липсва нормална пунктуация или е изписан с главни букви — признак за ниско качество на съдържанието", weight: 0.25 },
+    {
+      triggered: hasSensationalLanguage(text),
+      id: "sensational-lang",
+      label: "Емоционални суперлативи",
+      desc: "Текстът използва шокиращ или сензационен език без конкретни факти",
+      weight: 0.3,
+    },
+    {
+      triggered: matchesClickbaitEnding(text),
+      id: "clickbait-ending",
+      label: "Клик-бейт формула",
+      desc: "Текстът завършва с типична клик-бейт фраза, целяща да провокира кликване",
+      weight: 0.4,
+    },
+    {
+      triggered: /само тук|преди официалното|ексклузивно|преди да изтрие/i.test(text),
+      id: "false-urgency",
+      label: "Изкуствена спешност / ексклузивност",
+      desc: "Твърди се, че информацията е достъпна единствено тук или ще бъде изтрита скоро",
+      weight: 0.45,
+    },
+    {
+      triggered: hasPunctuationDeficit(text),
+      id: "punctuation-deficit",
+      label: "Дефицит на пунктуация / главни букви",
+      desc: "Текстът липсва нормална пунктуация или е изписан с главни букви — признак за ниско качество",
+      weight: 0.25,
+    },
   ];
 
   const firedSensational = cappedSensationalismScore(sensationalTriggers, 60);
   for (const s of firedSensational) {
     signals.push({ id: s.id, label: s.label, description: s.desc, weight: s.weight, isRisk: true });
-    score += s.weight * 100;
+    score += s.effectivePts;
   }
 
   // --- Political / propaganda markers ---
-  if (hasPoliticalDisinfoMarkers(text)) {
+  // False-positive guard: suppress if text is balanced/analytical or has proper attribution
+  if (hasPoliticalDisinfoMarkers(text) && !isBalanced && !hasOfficialAttr) {
     signals.push({
       id: "political-disinfo",
       label: "Политически дезинформационни маркери",
@@ -213,7 +248,7 @@ function runNewsHeuristic(input: string): { score: number; signals: Signal[] } {
   }
 
   // --- Civil unrest ---
-  if (hasCivilUnrestMarkers(text)) {
+  if (hasCivilUnrestMarkers(text) && !isBalanced) {
     signals.push({
       id: "civil-unrest",
       label: "Призив за гражданско недоволство",
@@ -249,7 +284,7 @@ function runNewsHeuristic(input: string): { score: number; signals: Signal[] } {
   }
 
   // --- Safe: balanced language ---
-  if (hasBalancedLanguage(text)) {
+  if (isBalanced) {
     signals.push({
       id: "balanced-language",
       label: "Балансиран език",
