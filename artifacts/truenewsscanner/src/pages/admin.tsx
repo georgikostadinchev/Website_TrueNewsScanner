@@ -1,22 +1,23 @@
 import { useState } from "react";
-import { Shield, CheckCircle, XCircle, RefreshCw, ChevronDown, ChevronUp, Save, Link2, Phone, MessageSquare, Newspaper, Lock } from "lucide-react";
+import { Shield, CheckCircle, XCircle, RefreshCw, ChevronDown, ChevronUp, Save, Link2, Phone, MessageSquare, Newspaper, Lock, Clock, Search, Filter } from "lucide-react";
 import { useGetAdminStats, useGetAdminReports, useGetAdminReport, useUpdateAdminReport, getGetAdminReportsQueryKey, getGetAdminStatsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@workspace/replit-auth-web";
+import { motion, AnimatePresence } from "framer-motion";
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: "Чакащ",
-  reviewed: "Прегледан",
+  pending: "Чакащ преглед",
+  reviewed: "Обработен",
   dismissed: "Отхвърлен",
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  reviewed: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  dismissed: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border-amber-200 dark:border-amber-800",
+  reviewed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800",
+  dismissed: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700",
 };
 
 const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -27,17 +28,20 @@ const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  url: "Линк",
+  url: "Уебсайт",
   phone: "Телефон",
   message: "Съобщение",
   news: "Новина",
 };
 
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value, color, icon: Icon }: { label: string; value: number; color: string; icon: any }) {
   return (
-    <div className="bg-card border border-card-border rounded-xl p-4 text-center">
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{label}</p>
+    <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
+      <div className="flex items-start justify-between mb-4">
+        <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">{label}</p>
+        <Icon className={`w-5 h-5 ${color}`} />
+      </div>
+      <p className="text-4xl font-extrabold text-foreground">{value}</p>
     </div>
   );
 }
@@ -59,22 +63,28 @@ function ReportRow({ report, onSelect, selected }: { report: Report; onSelect: (
   const TypeIcon = TYPE_ICONS[report.type] ?? Shield;
   return (
     <button
-      className={`w-full text-left px-4 py-3 border-b border-border flex items-start gap-3 hover:bg-muted/50 transition-colors ${selected ? "bg-primary/5 border-l-2 border-l-primary" : ""}`}
+      className={`w-full text-left px-5 py-4 border-b border-border flex items-start gap-4 transition-all outline-none ${
+        selected ? "bg-primary/5" : "hover:bg-muted/50 bg-card"
+      }`}
       onClick={() => onSelect(report.id)}
       data-testid={`report-row-${report.id}`}
     >
-      <TypeIcon className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full ${STATUS_COLORS[report.status]}`}>
+      <div className={`p-2 rounded-xl shrink-0 ${selected ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted text-muted-foreground'}`}>
+        <TypeIcon className="w-5 h-5" />
+      </div>
+      <div className="flex-1 min-w-0 pt-0.5">
+        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md border ${STATUS_COLORS[report.status]}`}>
             {STATUS_LABELS[report.status] ?? report.status}
           </span>
-          <span className="text-xs text-muted-foreground">{TYPE_LABELS[report.type] ?? report.type}</span>
+          <span className="text-xs font-bold text-muted-foreground">{new Date(report.submittedAt).toLocaleDateString("bg-BG")}</span>
         </div>
-        <p className="text-sm font-medium text-foreground truncate">{report.content}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{new Date(report.submittedAt).toLocaleDateString("bg-BG", { dateStyle: "medium" })}</p>
+        <p className="text-base font-bold text-foreground truncate mb-1">{report.content}</p>
+        <p className="text-sm font-medium text-muted-foreground truncate">{report.description}</p>
       </div>
-      {selected ? <ChevronUp className="w-4 h-4 text-muted-foreground flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+      <div className="shrink-0 pt-2 text-muted-foreground">
+        {selected ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+      </div>
     </button>
   );
 }
@@ -88,8 +98,14 @@ function ReportDetail({ reportId }: { reportId: string }) {
   const [notes, setNotes] = useState<string>("");
   const [notesReady, setNotesReady] = useState(false);
 
-  if (isLoading) return <div className="p-4 space-y-3"><Skeleton className="h-6 w-48" /><Skeleton className="h-20" /></div>;
-  if (!report) return <p className="p-4 text-sm text-muted-foreground">Докладът не беше намерен</p>;
+  if (isLoading) return (
+    <div className="p-8 space-y-4">
+      <Skeleton className="h-8 w-48 rounded-lg" />
+      <Skeleton className="h-24 rounded-xl" />
+      <Skeleton className="h-32 rounded-xl" />
+    </div>
+  );
+  if (!report) return <div className="p-8 text-center text-muted-foreground font-medium">Докладът не беше намерен</div>;
 
   const r = report as Report;
 
@@ -125,80 +141,103 @@ function ReportDetail({ reportId }: { reportId: string }) {
   const TypeIcon = TYPE_ICONS[r.type] ?? Shield;
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <TypeIcon className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">{TYPE_LABELS[r.type] ?? r.type}</span>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ml-auto ${STATUS_COLORS[r.status]}`}>
-          {STATUS_LABELS[r.status] ?? r.status}
-        </span>
-      </div>
-
-      <div className="space-y-3">
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Съдържание</p>
-          <p className="text-sm font-mono bg-muted/50 rounded p-2 break-all">{r.content}</p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Описание от потребителя</p>
-          <p className="text-sm text-foreground">{r.description}</p>
-        </div>
-        {r.reporterContact && (
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Контакт</p>
-            <p className="text-sm text-foreground">{r.reporterContact}</p>
+    <div className="p-6 md:p-8 space-y-8 overflow-y-auto h-full bg-card">
+      <div className="flex flex-col gap-4 border-b border-border pb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-muted rounded-xl">
+            <TypeIcon className="w-6 h-6 text-foreground" />
           </div>
-        )}
-        <div>
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Дата на подаване</p>
-          <p className="text-sm text-foreground">{new Date(r.submittedAt).toLocaleString("bg-BG")}</p>
+          <div>
+            <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Вид сигнал</p>
+            <p className="text-lg font-extrabold text-foreground">{TYPE_LABELS[r.type] ?? r.type}</p>
+          </div>
+          <span className={`ml-auto text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-lg border ${STATUS_COLORS[r.status]}`}>
+            {STATUS_LABELS[r.status] ?? r.status}
+          </span>
         </div>
       </div>
 
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Бележки на модератора</p>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Добавете бележки за проверката..."
-          className="min-h-[80px] resize-none text-sm"
-          data-testid="input-admin-notes"
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          className="mt-2 gap-1.5"
-          onClick={handleSaveNotes}
-          disabled={updateReport.isPending}
-          data-testid="button-save-notes"
-        >
-          <Save className="w-3.5 h-3.5" />
-          Запази бележките
-        </Button>
+      <div className="space-y-6">
+        <div>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Анализирано съдържание</p>
+          <div className="bg-muted/50 rounded-xl p-4 font-mono text-sm break-all border border-border/50 text-foreground">
+            {r.content}
+          </div>
+        </div>
+        
+        <div>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Контекст от потребителя</p>
+          <div className="bg-background rounded-xl p-4 border border-border text-foreground font-medium text-sm leading-relaxed">
+            {r.description || <span className="text-muted-foreground italic">Няма въведено описание</span>}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-muted/30 rounded-xl p-4 border border-border">
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Дата на подаване</p>
+            <p className="text-sm font-bold text-foreground flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              {new Date(r.submittedAt).toLocaleString("bg-BG")}
+            </p>
+          </div>
+          {r.reporterContact && (
+            <div className="bg-muted/30 rounded-xl p-4 border border-border">
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Контакт</p>
+              <p className="text-sm font-bold text-foreground truncate">{r.reporterContact}</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-2 pt-2">
-        <Button
-          size="sm"
-          className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700"
-          onClick={() => handleStatus("reviewed")}
-          disabled={updateReport.isPending || r.status === "reviewed"}
-          data-testid="button-mark-reviewed"
-        >
-          <CheckCircle className="w-3.5 h-3.5" />
-          Прегледан
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="flex-1 gap-1.5"
-          onClick={() => handleStatus("dismissed")}
-          disabled={updateReport.isPending || r.status === "dismissed"}
-          data-testid="button-mark-dismissed"
-        >
-          <XCircle className="w-3.5 h-3.5" />
-          Отхвърлен
-        </Button>
+      <div className="pt-6 border-t border-border space-y-4">
+        <div>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Вътрешни бележки</p>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Въведете детайли от проверката..."
+            className="min-h-[120px] resize-none text-sm bg-background border-border"
+            data-testid="input-admin-notes"
+          />
+        </div>
+        
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="font-bold"
+            onClick={handleSaveNotes}
+            disabled={updateReport.isPending}
+            data-testid="button-save-notes"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            Запази
+          </Button>
+
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => handleStatus("reviewed")}
+              disabled={updateReport.isPending || r.status === "reviewed"}
+              data-testid="button-mark-reviewed"
+            >
+              <CheckCircle className="w-4 h-4 mr-2" />
+              Потвърди
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="font-bold text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-900/30"
+              onClick={() => handleStatus("dismissed")}
+              disabled={updateReport.isPending || r.status === "dismissed"}
+              data-testid="button-mark-dismissed"
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Отхвърли
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -236,105 +275,102 @@ export default function AdminPage() {
 
   if (authLoading) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-16 flex items-center justify-center">
-        <Skeleton className="h-8 w-48" />
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   if (!user?.isAdmin) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-24 flex flex-col items-center gap-4 text-center">
-        <Lock className="w-12 h-12 text-slate-400" />
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Нямате достъп</h1>
-        <p className="text-slate-500">Тази страница е достъпна само за администратора.</p>
+      <div className="max-w-2xl mx-auto px-6 py-32 text-center">
+        <div className="inline-flex p-4 rounded-full bg-slate-100 dark:bg-slate-900 mb-6">
+          <Lock className="w-12 h-12 text-slate-400" />
+        </div>
+        <h1 className="text-3xl font-extrabold text-foreground mb-3">Ограничен достъп</h1>
+        <p className="text-lg font-medium text-muted-foreground">Този модул е предназначен само за оторизирани модератори.</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Shield className="w-6 h-6 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Административен панел</h1>
+    <div className="max-w-7xl mx-auto px-6 py-10 flex-1 flex flex-col h-[calc(100dvh-5rem)]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 shrink-0">
+        <div>
+          <h1 className="text-3xl font-extrabold text-foreground tracking-tight">Работно табло</h1>
+          <p className="text-sm font-medium text-muted-foreground mt-1">Преглед и управление на потребителски сигнали</p>
         </div>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={handleRefresh} data-testid="button-refresh">
+        <Button variant="outline" className="gap-2 font-bold shadow-sm" onClick={handleRefresh} data-testid="button-refresh">
           <RefreshCw className="w-4 h-4" />
-          Обнови
+          Обнови данните
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 shrink-0">
         {statsLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
         ) : stats ? (
           <>
-            <StatCard label="Общо доклади" value={(stats as any).totalReports ?? 0} color="text-foreground" />
-            <StatCard label="Чакащи" value={(stats as any).pendingReports ?? 0} color="text-yellow-600 dark:text-yellow-400" />
-            <StatCard label="Прегледани" value={(stats as any).reviewedReports ?? 0} color="text-green-600 dark:text-green-400" />
-            <StatCard label="Отхвърлени" value={(stats as any).dismissedReports ?? 0} color="text-muted-foreground" />
+            <StatCard label="Общо сигнали" value={(stats as any).totalReports ?? 0} color="text-primary" icon={Search} />
+            <StatCard label="Чакащи" value={(stats as any).pendingReports ?? 0} color="text-amber-500" icon={Clock} />
+            <StatCard label="Обработени" value={(stats as any).reviewedReports ?? 0} color="text-emerald-500" icon={CheckCircle} />
+            <StatCard label="Отхвърлени" value={(stats as any).dismissedReports ?? 0} color="text-slate-400" icon={XCircle} />
           </>
         ) : null}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground mr-1">Статус:</span>
-          {["all", "pending", "reviewed", "dismissed"].map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "border-border bg-card text-foreground hover:bg-muted"
-              }`}
-              data-testid={`filter-status-${s}`}
-            >
-              {s === "all" ? "Всички" : STATUS_LABELS[s]}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground mr-1">Тип:</span>
-          {["all", "url", "phone", "message", "news"].map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                typeFilter === t ? "bg-primary text-primary-foreground border-primary" : "border-border bg-card text-foreground hover:bg-muted"
-              }`}
-              data-testid={`filter-type-${t}`}
-            >
-              {t === "all" ? "Всички" : TYPE_LABELS[t]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Reports list + detail */}
-      <div className="grid md:grid-cols-2 gap-4">
-        <div className="bg-card border border-card-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-            <h2 className="font-semibold text-foreground text-sm">Доклади ({reportsData?.total ?? 0})</h2>
-            {(stats as any)?.pendingReports > 0 && (
-              <span className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-2 py-0.5 rounded-full font-medium">
-                {(stats as any).pendingReports} чакащи
-              </span>
-            )}
+      <div className="flex-1 min-h-0 bg-card border border-border rounded-3xl shadow-lg overflow-hidden flex flex-col md:flex-row">
+        {/* Left List Pane */}
+        <div className="w-full md:w-[400px] lg:w-[450px] border-r border-border flex flex-col bg-background z-10 shrink-0">
+          <div className="p-4 border-b border-border bg-card">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Филтри</span>
+            </div>
+            <div className="space-y-3">
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {["all", "pending", "reviewed", "dismissed"].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors outline-none ${
+                      statusFilter === s ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                    data-testid={`filter-status-${s}`}
+                  >
+                    {s === "all" ? "Всички" : STATUS_LABELS[s]}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {["all", "url", "phone", "message", "news"].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTypeFilter(t)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors outline-none ${
+                      typeFilter === t ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                    data-testid={`filter-type-${t}`}
+                  >
+                    {t === "all" ? "Всички типове" : TYPE_LABELS[t]}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="divide-y divide-border overflow-auto max-h-[600px]">
+          
+          <div className="flex-1 overflow-y-auto min-h-[300px]">
             {reportsLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="p-4 space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-full" />
+                <div key={i} className="p-5 border-b border-border space-y-3">
+                  <div className="flex gap-2"><Skeleton className="h-5 w-20 rounded" /><Skeleton className="h-5 w-24 rounded" /></div>
+                  <Skeleton className="h-5 w-full rounded" />
                 </div>
               ))
             ) : reports.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground text-sm">
-                Няма доклади за показване
+              <div className="p-10 text-center flex flex-col items-center">
+                <Search className="w-10 h-10 text-muted-foreground/30 mb-3" />
+                <p className="text-sm font-bold text-muted-foreground">Няма намерени сигнали</p>
               </div>
             ) : (
               reports.map((report) => (
@@ -349,15 +385,17 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="bg-card border border-card-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="font-semibold text-foreground text-sm">Детайли и модерация</h2>
-          </div>
+        {/* Right Detail Pane */}
+        <div className="flex-1 bg-card min-w-0 flex flex-col h-[500px] md:h-auto">
           {selectedId ? (
             <ReportDetail key={selectedId} reportId={selectedId} />
           ) : (
-            <div className="p-8 text-center text-muted-foreground text-sm">
-              Изберете доклад от списъка за преглед
+            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center bg-muted/10">
+              <Shield className="w-16 h-16 text-muted-foreground/20 mb-4" strokeWidth={1} />
+              <p className="text-lg font-bold text-muted-foreground">Изберете сигнал за преглед</p>
+              <p className="text-sm font-medium text-muted-foreground/70 mt-1 max-w-sm">
+                Използвайте списъка вляво, за да отворите детайлите и да модерирате сигнала.
+              </p>
             </div>
           )}
         </div>
